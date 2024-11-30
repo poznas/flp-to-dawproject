@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-@dataclass
+@dataclass(frozen=True)  # Make it immutable and hashable
 class Clip:
     """Represents an audio clip with position, duration and color information."""
     
@@ -20,6 +20,25 @@ class Clip:
     
     # Internal state
     _metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Validate clip attributes after initialization."""
+        # Sanitize name (convert spaces to underscores)
+        object.__setattr__(self, 'name', self.name.replace(' ', '_'))
+        
+        if self.position < 0:
+            raise ValueError("Position cannot be negative")
+        if self.duration <= 0:
+            raise ValueError("Duration must be positive")
+        if not self.color.startswith('#') or len(self.color) != 7:
+            raise ValueError("Color must be in #RRGGBB format")
+        if self.volume < 0:
+            raise ValueError("Volume cannot be negative")
+
+    def __hash__(self):
+        """Make clip hashable based on its attributes."""
+        return hash((self.name, self.position, self.duration, self.color, 
+                    str(self.source_path), self.volume, self.muted))
 
     def validate(self) -> None:
         """Validate clip attributes."""

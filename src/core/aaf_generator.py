@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
+import aaf2
 
 if TYPE_CHECKING:
     from ..models.arrangement import Arrangement
@@ -16,7 +17,9 @@ class AAFGenerator:
             audio_file_map: Mapping of clips to their exported audio file paths
         """
         self.arrangement = arrangement
-        self.audio_file_map = audio_file_map  # Maps clips to exported audio paths
+        self.audio_file_map = {
+            hash(clip): path for clip, path in audio_file_map.items()
+        }  # Store using clip hashes since Clip is now immutable
         from ..utils.logger import get_logger
         self.logger = get_logger()
         
@@ -33,7 +36,6 @@ class AAFGenerator:
         output_path = Path(output_path)
         
         try:
-            import aaf2
             with aaf2.open(str(output_path), 'w') as f:
                 # Create main composition
                 main_composition = f.create.MasterMob(self.arrangement.name)
@@ -68,21 +70,10 @@ class AAFGenerator:
             
     def _add_clip_to_composition(self, f: "aaf2.File", composition: "aaf2.MasterMob", 
                                clip: "Clip", edit_rate: int) -> None:
-        """Add a clip to the AAF composition.
-        
-        Args:
-            f: AAF file object
-            composition: Master mob composition
-            clip: Clip to add
-            edit_rate: Frame rate for timing calculations
-            
-        Raises:
-            FileNotFoundError: If audio file is missing
-            ValueError: If clip data is invalid
-        """
+        """Add a clip to the AAF composition."""
         try:
-            # Get the exported audio file path
-            audio_path = self.audio_file_map.get(clip)
+            # Get the exported audio file path using clip hash
+            audio_path = self.audio_file_map.get(hash(clip))
             if not audio_path or not audio_path.exists():
                 self.logger.warning(f"Audio file not found for clip {clip.name}, skipping")
                 return

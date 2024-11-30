@@ -7,85 +7,70 @@ from .arrangement import Arrangement
 class Project:
     """Represents an FL Studio project with multiple arrangements."""
     
-    def __init__(self, name: str, arrangements: List[Arrangement] = None, 
+    def __init__(self, name: str, arrangements: Optional[List[Arrangement]] = None, 
                  source_path: Optional[Path] = None, output_dir: Optional[Path] = None):
-        """Initialize project instance.
-        
-        Args:
-            name: Project name
-            arrangements: Optional list of arrangements
-            source_path: Optional path to source FL Studio project file
-            output_dir: Optional output directory path
-        """
-        # Import logger here to avoid circular import
+        """Initialize project instance."""
         from ..utils.logger import get_logger
         self.logger = get_logger()
         
-        self.name = name
+        if not name:
+            raise ValueError("Project name cannot be empty")
+            
+        self.name = name.strip()
         self.arrangements = arrangements or []
         self.source_path = source_path
         self.output_dir = output_dir
         
-    def add_arrangement(self, arrangement: Arrangement) -> None:
-        """Add an arrangement to the project.
+        # Initial validation
+        self.validate()
         
-        Args:
-            arrangement: Arrangement instance to add
-            
-        Raises:
-            ValueError: If arrangement with same name already exists
-        """
+    def add_arrangement(self, arrangement: Arrangement) -> None:
+        """Add an arrangement to the project."""
         if self.get_arrangement_by_name(arrangement.name):
             raise ValueError(f"Arrangement with name '{arrangement.name}' already exists")
+            
+        # Validate arrangement before adding
+        arrangement.validate()
         self.arrangements.append(arrangement)
         
     def remove_arrangement(self, arrangement: Arrangement) -> None:
-        """Remove an arrangement from the project.
-        
-        Args:
-            arrangement: Arrangement instance to remove
-        """
+        """Remove an arrangement from the project."""
         if arrangement in self.arrangements:
             self.arrangements.remove(arrangement)
             
     def get_arrangement_by_name(self, name: str) -> Optional[Arrangement]:
-        """Find an arrangement by its name.
-        
-        Args:
-            name: Name of arrangement to find
-            
-        Returns:
-            Matching Arrangement instance or None if not found
-        """
+        """Find an arrangement by its name."""
         for arrangement in self.arrangements:
             if arrangement.name == name:
                 return arrangement
         return None
         
     def validate(self) -> None:
-        """Validate project and all its arrangements.
-        
-        Raises:
-            ValueError: If validation fails
-        """
+        """Validate project and all its arrangements."""
         if not self.name:
             raise ValueError("Project name cannot be empty")
             
+        if self.source_path and not isinstance(self.source_path, Path):
+            raise TypeError("source_path must be a Path object")
+            
+        if self.output_dir and not isinstance(self.output_dir, Path):
+            raise TypeError("output_dir must be a Path object")
+            
         # Check for arrangement name uniqueness
         names = [arr.name for arr in self.arrangements]
-        if len(names) != len(set(names)):
-            raise ValueError("Duplicate arrangement names are not allowed")
+        duplicate_names = set(name for name in names if names.count(name) > 1)
+        if duplicate_names:
+            raise ValueError(f"Duplicate arrangement names found: {', '.join(duplicate_names)}")
             
         # Validate each arrangement
         for arrangement in self.arrangements:
-            arrangement.validate()
+            try:
+                arrangement.validate()
+            except ValueError as e:
+                raise ValueError(f"Invalid arrangement '{arrangement.name}': {str(e)}")
             
     def get_all_clip_paths(self) -> Set[Path]:
-        """Get set of all unique audio file paths used in project.
-        
-        Returns:
-            Set of paths to all audio files referenced in project
-        """
+        """Get set of all unique audio file paths used in project."""
         paths = set()
         for arrangement in self.arrangements:
             for clip in arrangement.clips:
@@ -94,24 +79,20 @@ class Project:
         return paths
         
     def validate_audio_files(self) -> bool:
-        """Check if all referenced audio files exist.
-        
-        Returns:
-            True if all audio files exist, False otherwise
-        """
-        missing = []
+        """Check if all referenced audio files exist."""
+        missing_files = []
         for path in self.get_all_clip_paths():
             if not path.exists():
-                missing.append(path)
+                missing_files.append(path)
                 self.logger.warning(f"Audio file not found: {path}")
-        return len(missing) == 0
+                
+        if missing_files:
+            self.logger.error(f"Missing {len(missing_files)} audio files")
+            return False
+        return True
         
     def to_dict(self) -> Dict[str, Any]:
-        """Convert project to dictionary format for serialization.
-        
-        Returns:
-            Dictionary representation of project
-        """
+        """Convert project to dictionary format for serialization."""
         return {
             'name': self.name,
             'source_path': str(self.source_path) if self.source_path else None,
@@ -121,14 +102,7 @@ class Project:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Project':
-        """Create project instance from dictionary data.
-        
-        Args:
-            data: Dictionary containing project data
-            
-        Returns:
-            New Project instance
-        """
+        """Create project instance from dictionary data."""
         source_path = Path(data['source_path']) if data.get('source_path') else None
         output_dir = Path(data['output_dir']) if data.get('output_dir') else None
         

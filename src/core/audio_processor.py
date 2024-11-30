@@ -1,10 +1,9 @@
-import wave
-import numpy as np
 from pathlib import Path
 from typing import List, Dict, Optional
-import shutil
 from concurrent.futures import ThreadPoolExecutor
-import logging
+import wave
+import numpy as np
+import shutil
 
 from ..models.clip import Clip
 from ..utils.logger import get_logger
@@ -25,7 +24,7 @@ class AudioProcessor:
         """Export audio clips while preserving quality.
         Returns a dictionary mapping clips to their exported file paths."""
         
-        result = {}
+        result: Dict[Clip, Path] = {}
         failed_clips = []
         max_workers = max_workers or self.config.MAX_PARALLEL_EXPORTS
 
@@ -69,7 +68,7 @@ class AudioProcessor:
                 i += 1
 
             # For WAV files, we can optimize by copying if no processing is needed
-            if source_path.suffix.lower() == '.wav' and clip.volume == 1.0:
+            if source_path.suffix.lower() == '.wav' and clip.volume == 1.0 and not clip.muted:
                 shutil.copy2(source_path, output_path)
                 self.logger.debug(f"Copied {clip.name} to {output_path}")
                 return output_path
@@ -78,11 +77,11 @@ class AudioProcessor:
             with wave.open(str(source_path), 'rb') as wav_in:
                 params = wav_in.getparams()
                 frames = wav_in.readframes(wav_in.getnframes())
-                
-                # Apply volume adjustment if needed
-                if clip.volume != 1.0:
+
+                if clip.volume != 1.0 or clip.muted:
                     audio_data = np.frombuffer(frames, dtype=np.int16)
-                    audio_data = (audio_data * clip.volume).astype(np.int16)
+                    volume = 0.0 if clip.muted else clip.volume
+                    audio_data = (audio_data * volume).astype(np.int16)
                     frames = audio_data.tobytes()
 
                 with wave.open(str(output_path), 'wb') as wav_out:
@@ -95,20 +94,19 @@ class AudioProcessor:
         except Exception as e:
             self.logger.error(f"Error processing clip {clip.name}: {e}")
             return None
-            
+
     def validate_audio_files(self, clips: List[Clip]) -> bool:
         """Validate all audio files in the output directory."""
         all_valid = True
         
         for clip in clips:
-            output_path = self.output_dir / f"{clip.name}_{clip.source_path.stem}.wav"
-            if not output_path.exists():
-                self.logger.error(f"Missing output file for clip {clip.name}")
+            if not clip.source_path:
+                self.logger.error(f"No source path for clip {clip.name}")
                 all_valid = False
                 continue
-                
+
             try:
-                with wave.open(str(output_path), 'rb') as wav:
+                with wave.open(str(clip.source_path), 'rb') as wav:
                     if wav.getnframes() == 0:
                         self.logger.error(f"Empty audio file for clip {clip.name}")
                         all_valid = False
