@@ -1,27 +1,39 @@
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
 import shutil
-import os
 
-from ..models.project import Project
-from ..models.arrangement import Arrangement
-from ..utils.logger import get_logger
-from ..config import Config
+if TYPE_CHECKING:
+    from ..models.project import Project
+    from ..models.arrangement import Arrangement
 
 class FileManager:
     """Handles file system operations and directory structure."""
     
     def __init__(self, base_dir: str):
+        """Initialize file manager with base directory.
+        
+        Args:
+            base_dir: Base directory for file operations
+        """
         self.base_dir = Path(base_dir)
+        # Import logger here to avoid circular import
+        from ..utils.logger import get_logger
         self.logger = get_logger()
-        self.config = Config()
         
-    def create_directory_structure(self, project: Project) -> Dict[Arrangement, Path]:
+    def create_directory_structure(self, project: "Project") -> Dict["Arrangement", Path]:
         """Create output directory structure for project and arrangements.
-        Returns mapping of arrangements to their output directories."""
         
+        Args:
+            project: Project instance containing arrangements
+            
+        Returns:
+            Dictionary mapping arrangements to their output directories
+            
+        Raises:
+            OSError: If directory creation fails
+        """
         # Create base output directory
-        project_dir = self.base_dir / project.name
+        project_dir = self.base_dir / self._sanitize_path(project.name)
         project_dir.mkdir(parents=True, exist_ok=True)
         
         # Create arrangement directories
@@ -41,9 +53,15 @@ class FileManager:
         return arrangement_dirs
         
     def cleanup_temp_files(self, directory: Optional[Path] = None) -> None:
-        """Clean up temporary files and directories."""
-        directory = directory or self.config.TEMP_DIR
+        """Clean up temporary files and directories.
         
+        Args:
+            directory: Optional specific directory to clean, defaults to temp dir
+        """
+        if not directory:
+            from ..config import Config
+            directory = Config.TEMP_DIR
+            
         if not directory.exists():
             return
             
@@ -54,7 +72,11 @@ class FileManager:
             self.logger.warning(f"Failed to clean up temporary directory {directory}: {e}")
             
     def validate_paths(self) -> bool:
-        """Validate all required paths exist and are accessible."""
+        """Validate all required paths exist and are accessible.
+        
+        Returns:
+            True if all paths are valid and accessible, False otherwise
+        """
         try:
             # Check base directory
             if not self.base_dir.exists():
@@ -70,7 +92,8 @@ class FileManager:
                 return False
                 
             # Check temp directory
-            temp_dir = self.config.TEMP_DIR
+            from ..config import Config
+            temp_dir = Config.TEMP_DIR
             if not temp_dir.exists():
                 temp_dir.mkdir(parents=True)
                 
@@ -80,9 +103,15 @@ class FileManager:
             self.logger.error(f"Path validation failed: {e}")
             return False
             
-    @staticmethod
-    def _sanitize_path(name: str) -> str:
-        """Sanitize a string for use in file paths."""
+    def _sanitize_path(self, name: str) -> str:
+        """Sanitize a string for use in file paths.
+        
+        Args:
+            name: Original path string
+            
+        Returns:
+            Sanitized path string
+        """
         # Replace invalid characters with underscore
         invalid_chars = '<>:"/\\|?*'
         for char in invalid_chars:
@@ -98,7 +127,15 @@ class FileManager:
         return name
         
     def copy_audio_file(self, source: Path, dest: Path) -> bool:
-        """Copy audio file with error handling."""
+        """Copy audio file with error handling.
+        
+        Args:
+            source: Source audio file path
+            dest: Destination path
+            
+        Returns:
+            True if copy succeeded, False otherwise
+        """
         try:
             shutil.copy2(source, dest)
             return True
@@ -107,7 +144,14 @@ class FileManager:
             return False
             
     def ensure_unique_path(self, path: Path) -> Path:
-        """Ensure path is unique by adding number suffix if needed."""
+        """Ensure path is unique by adding number suffix if needed.
+        
+        Args:
+            path: Original path
+            
+        Returns:
+            Unique path with number suffix if needed
+        """
         if not path.exists():
             return path
             

@@ -98,6 +98,7 @@ class TestAudioProcessor:
 
     def test_invalid_audio_file(self, temp_dir):
         """Test handling of invalid audio files."""
+        temp_dir.mkdir(parents=True, exist_ok=True)
         # Create invalid WAV file
         invalid_wav = temp_dir / "invalid.wav"
         invalid_wav.write_bytes(b"not a wav file")

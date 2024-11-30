@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import pyflp
 
+
 def generate_sine_wave(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
     """Generate a sine wave array."""
     t = np.linspace(0, duration, int(sample_rate * duration))
@@ -176,14 +177,64 @@ def expected_aaf_path(fixtures_dir, sample_audio_dir) -> Path:
     
     return aaf_path
 
-@pytest.fixture(scope="session")
-def temp_dir(tmp_path_factory) -> Path:
-    """Create temporary directory for test outputs."""
-    return tmp_path_factory.mktemp("test_output")
+@pytest.fixture
+def temp_dir(tmp_path) -> Path:
+    """Get temporary directory for test outputs."""
+    test_dir = tmp_path / "test_output"
+    test_dir.mkdir(exist_ok=True)
+    return test_dir
 
-@pytest.fixture(autouse=True)
-def cleanup_temp_files(temp_dir):
-    """Cleanup temporary files after each test."""
-    yield
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
+@pytest.fixture
+def sample_wav_file(temp_dir) -> Path:
+    """Create a simple test WAV file."""
+    wav_path = temp_dir / "test.wav"
+    duration = 1.0  # seconds
+    sample_rate = 44100
+    t = np.linspace(0, duration, int(sample_rate * duration))
+    audio_data = np.sin(2 * np.pi * 440 * t)  # 440 Hz sine wave
+    
+    # Ensure directory exists
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Save as WAV
+    scaled = np.int16(audio_data * 32767)
+    with wave.open(str(wav_path), 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(scaled.tobytes())
+    
+    return wav_path
+
+@pytest.fixture
+def sample_clip(sample_wav_file):
+    """Create a sample clip instance."""
+    from src.models.clip import Clip
+    return Clip(
+        name="test_clip",
+        position=0.0,
+        duration=1.0,
+        color="#FF0000",
+        source_path=sample_wav_file,
+        volume=1.0
+    )
+
+@pytest.fixture
+def sample_arrangement(sample_clip):
+    """Create a sample arrangement instance."""
+    from src.models.arrangement import Arrangement
+    arrangement = Arrangement(name="TEST_ARRANGEMENT")
+    arrangement.add_clip(sample_clip)
+    return arrangement
+
+@pytest.fixture
+def sample_project(sample_arrangement, temp_dir):
+    """Create a sample project instance."""
+    from src.models.project import Project
+    project = Project(
+        name="test_project",
+        source_path=temp_dir / "test.flp",
+        output_dir=temp_dir / "output"
+    )
+    project.add_arrangement(sample_arrangement)
+    return project

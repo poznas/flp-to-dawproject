@@ -21,6 +21,8 @@ class TestFLProjectParser:
 
     def test_invalid_project_file(self, temp_dir):
         """Test handling of invalid project file."""
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
         invalid_file = temp_dir / "invalid.flp"
         invalid_file.write_bytes(b"not a valid flp file")
         
