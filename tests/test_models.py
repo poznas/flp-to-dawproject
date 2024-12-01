@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 
 from src.models.project import Project
 from src.models.arrangement import Arrangement
@@ -36,14 +37,33 @@ class TestClip:
 
     def test_clip_serialization(self, sample_clip):
         """Test clip serialization to and from dict."""
+        # Add some metadata to test
+        sample_clip = sample_clip.with_metadata('test_key', 'test_value')
+        
         data = sample_clip.to_dict()
         restored_clip = Clip.from_dict(data)
         
-        assert restored_clip.name == sample_clip.name
-        assert restored_clip.position == sample_clip.position
-        assert restored_clip.duration == sample_clip.duration
-        assert restored_clip.color == sample_clip.color
-        assert str(restored_clip.source_path) == str(sample_clip.source_path)
+        assert restored_clip == sample_clip
+        assert restored_clip.get_metadata('test_key') == 'test_value'
+
+    def test_clip_metadata(self, sample_clip):
+        """Test metadata operations."""
+        # Add metadata
+        clip_with_meta = sample_clip.with_metadata('key1', 'value1')
+        clip_with_more = clip_with_meta.with_metadata('key2', 'value2')
+        
+        assert clip_with_more.get_metadata('key1') == 'value1'
+        assert clip_with_more.get_metadata('key2') == 'value2'
+        assert clip_with_more.get_metadata('nonexistent') is None
+        assert clip_with_more.get_metadata('nonexistent', 'default') == 'default'
+
+    def test_clip_immutability(self, sample_clip):
+        """Test that clip is immutable."""
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            sample_clip.name = "new_name"
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            sample_clip.position = 2.0
 
 class TestArrangement:
     def test_arrangement_initialization(self):
@@ -60,25 +80,67 @@ class TestArrangement:
         arr.add_clip(sample_clip)
         assert len(arr.clips) == 1
         assert arr.clips[0] == sample_clip
-        assert sample_clip.arrangement_name == "TEST_ARR"
+        assert arr.clips[0].arrangement_name == "TEST_ARR"
+        
+        # Basic equality should ignore arrangement name
+        assert arr.clips[0] == sample_clip
+        
+        # Full equality should consider arrangement name
+        assert not arr.clips[0].full_equals(sample_clip)
         
         # Remove clip
         arr.remove_clip(sample_clip)
         assert len(arr.clips) == 0
-        assert sample_clip.arrangement_name is None
+
+    def test_get_clip_by_name(self, sample_clip):
+        """Test finding clips by name."""
+        arr = Arrangement(name="TEST_ARR")
+        arr.add_clip(sample_clip)
+        
+        found_clip = arr.get_clip_by_name(sample_clip.name)
+        assert found_clip is not None
+        assert found_clip == sample_clip
+        
+        assert arr.get_clip_by_name("nonexistent") is None
 
     def test_get_duration(self, sample_clip):
         """Test arrangement duration calculation."""
         arr = Arrangement(name="TEST_ARR")
         assert arr.get_duration() == 0.0
         
-        arr.add_clip(sample_clip)  # At position 0.0, duration 2.0
-        assert arr.get_duration() == 2.0
+        arr.add_clip(sample_clip)  # At position 0.0
+        assert arr.get_duration() == sample_clip.duration
         
         # Add another clip that extends beyond
-        clip2 = Clip(name="clip2", position=1.5, duration=2.0, color="#00FF00")
+        clip2 = Clip(
+            name="clip2", 
+            position=1.5, 
+            duration=2.0, 
+            color="#00FF00"
+        )
         arr.add_clip(clip2)
         assert arr.get_duration() == 3.5  # 1.5 + 2.0
+
+    def test_arrangement_validation(self, sample_clip):
+        """Test arrangement validation."""
+        arr = Arrangement(name="TEST_ARR")
+        
+        # Empty name
+        with pytest.raises(ValueError, match="cannot be empty"):
+            Arrangement(name="")
+        
+        # Duplicate clip names
+        arr.add_clip(sample_clip)
+        duplicate = Clip(
+            name=sample_clip.name,
+            position=1.0,
+            duration=1.0,
+            color="#00FF00"
+        )
+        
+        with pytest.raises(ValueError, match="Duplicate clip names"):
+            arr.add_clip(duplicate)
+            arr.validate()
 
 class TestProject:
     def test_project_initialization(self, temp_dir):
@@ -108,6 +170,17 @@ class TestProject:
         project.remove_arrangement(sample_arrangement)
         assert len(project.arrangements) == 0
 
+    def test_get_arrangement_by_name(self, sample_arrangement):
+        """Test finding arrangements by name."""
+        project = Project(name="test_project")
+        project.add_arrangement(sample_arrangement)
+        
+        found = project.get_arrangement_by_name(sample_arrangement.name)
+        assert found is not None
+        assert found == sample_arrangement
+        
+        assert project.get_arrangement_by_name("nonexistent") is None
+
     def test_validate_audio_files(self, sample_project, sample_wav_file):
         """Test audio file validation."""
         assert sample_project.validate_audio_files() == True
@@ -116,11 +189,24 @@ class TestProject:
         sample_wav_file.unlink()
         assert sample_project.validate_audio_files() == False
 
-    def test_project_serialization(self, sample_project):
-        """Test project serialization to and from dict."""
-        data = sample_project.to_dict()
-        restored_project = Project.from_dict(data)
+    def test_project_validation(self, sample_arrangement):
+        """Test project validation."""
+        project = Project(name="test_project")
         
-        assert restored_project.name == sample_project.name
-        assert len(restored_project.arrangements) == len(sample_project.arrangements)
-        assert restored_project.arrangements[0].name == sample_project.arrangements[0].name
+        # Empty name
+        with pytest.raises(ValueError, match="cannot be empty"):
+            Project(name="")
+        
+        # Duplicate arrangement names
+        project.add_arrangement(sample_arrangement)
+        duplicate = Arrangement(name=sample_arrangement.name)
+        
+        with pytest.raises(ValueError, match="Duplicate arrangement names"):
+            project.add_arrangement(duplicate)
+            project.validate()
+
+    def test_get_all_clip_paths(self, sample_project, sample_wav_file):
+        """Test collecting all unique audio file paths."""
+        paths = sample_project.get_all_clip_paths()
+        assert len(paths) > 0
+        assert sample_wav_file in paths

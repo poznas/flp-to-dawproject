@@ -1,6 +1,12 @@
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+import wave
+import numpy as np
+import aaf2
 from pathlib import Path
 from typing import Dict, List, Optional, TYPE_CHECKING
-import aaf2
+import shutil
+import struct
 
 if TYPE_CHECKING:
     from ..models.arrangement import Arrangement
@@ -23,51 +29,74 @@ class AAFGenerator:
         from ..utils.logger import get_logger
         self.logger = get_logger()
         
+    # src/core/aaf_generator.py
+
     def generate_aaf(self, output_path: str) -> None:
-        """Generate AAF file for arrangement.
-        
-        Args:
-            output_path: Path where AAF file should be created
-            
-        Raises:
-            FileNotFoundError: If audio files are missing
-            OSError: If AAF generation fails
-        """
+        """Generate AAF file for arrangement."""
         output_path = Path(output_path)
+        
+        # Validate audio files first
+        missing_files = []
+        for clip in self.arrangement.clips:
+            audio_path = self.audio_file_map.get(hash(clip))
+            if not audio_path or not audio_path.exists():
+                missing_files.append(clip.name)
+                
+        if missing_files:
+            raise FileNotFoundError(f"Missing audio files for clips: {', '.join(missing_files)}")
         
         try:
             with aaf2.open(str(output_path), 'w') as f:
-                # Create main composition
-                main_composition = f.create.MasterMob(self.arrangement.name)
-                f.content.mobs.append(main_composition)
+                # Create composition
+                comp = f.create.Composition(self.arrangement.name)
                 
-                # Set basic project properties
-                edit_rate = 25  # Standard frame rate 
-                
-                # Create tape source (for timecode)
+                # Create tape mob (required for timeline)
                 tape_mob = f.create.SourceMob()
                 f.content.mobs.append(tape_mob)
-                timecode_rate = 25
-                start_time = 0
+                tape_slot = tape_mob.create_timeline_sound_slot(edit_rate=48000)
                 
-                # Add tape slots
-                tape_mob.create_tape_slots(
-                    "Master", 
-                    edit_rate,
-                    timecode_rate, 
-                    media_kind='picture'
-                )
+                # Create master mob
+                master_mob = f.create.MasterMob(self.arrangement.name)
+                f.content.mobs.append(master_mob)
                 
-                # Process each clip in the arrangement
+                # Process clips
+                sequence = []
                 for clip in sorted(self.arrangement.clips, key=lambda x: x.position):
-                    self._add_clip_to_composition(f, main_composition, clip, edit_rate)
+                    audio_path = self.audio_file_map.get(hash(clip))
+                    if not audio_path or not audio_path.exists():
+                        self.logger.warning(f"Audio file not found for clip {clip.name}, skipping")
+                        continue
+                        
+                    try:
+                        # Create source mob
+                        source_mob = f.create.SourceMob()
+                        f.content.mobs.append(source_mob)
+                        
+                        # Import audio
+                        source_slot = source_mob.import_audio_essence(str(audio_path))
+                        src_clip = source_slot.segment
+                        
+                        # Set timing
+                        src_clip.start = int(clip.position * 48000)
+                        src_clip.length = int(clip.duration * 48000)
+                        
+                        # Add to sequence
+                        sequence.append(src_clip)
+                        
+                    except Exception as e:
+                        self.logger.error(f"Failed to process clip {clip.name}: {e}")
+                        
+                # Create sequence
+                if sequence:
+                    comp_slot = comp.create_timeline_sound_slot(edit_rate=48000)
+                    comp_slot.segment.components = sequence
                     
                 self.logger.info(f"Generated AAF file at {output_path}")
-                    
+                
         except Exception as e:
             self.logger.error(f"Failed to generate AAF file: {e}")
             raise
-            
+                
     def _add_clip_to_composition(self, f: "aaf2.File", composition: "aaf2.MasterMob", 
                                clip: "Clip", edit_rate: int) -> None:
         """Add a clip to the AAF composition."""

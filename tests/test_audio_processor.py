@@ -38,30 +38,30 @@ class TestAudioProcessor:
 
     def test_volume_adjustment(self, temp_dir, sample_wav_file):
         """Test volume adjustment during export."""
-        # Create clip with modified volume
         clip = Clip(
             name="volume_test",
             position=0.0,
-            duration=2.0,
+            duration=1.0,
             color="#FF0000",
             source_path=sample_wav_file,
-            volume=0.5  # 50% volume
+            volume=0.5
         )
-        
+
         processor = AudioProcessor(str(temp_dir))
         result = processor.export_audio_clips([clip])
         exported_path = result[clip]
-        
-        # Read and compare audio data
+
+        # Read and compare audio data as float32 for accurate comparison
         with wave.open(str(sample_wav_file), 'rb') as original:
             orig_frames = np.frombuffer(original.readframes(original.getnframes()), dtype=np.int16)
-            
+            orig_float = orig_frames.astype(np.float32) / 32767.0
+
         with wave.open(str(exported_path), 'rb') as exported:
             exported_frames = np.frombuffer(exported.readframes(exported.getnframes()), dtype=np.int16)
-            
-        # Check if exported audio is approximately half the amplitude
-        # Allow for small differences due to floating point arithmetic
-        assert np.allclose(exported_frames, orig_frames * 0.5, rtol=1e-3)
+            exported_float = exported_frames.astype(np.float32) / 32767.0
+
+        # Compare using relative tolerance
+        assert np.allclose(exported_float, orig_float * 0.5, rtol=1e-3)
 
     def test_parallel_processing(self, temp_dir, sample_wav_file):
         """Test processing multiple clips in parallel."""

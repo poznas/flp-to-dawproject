@@ -8,10 +8,14 @@ from src.models.clip import Clip
 from src.models.arrangement import Arrangement
 from src.models.project import Project
 
-def generate_sine_wave(frequency: float = 440, duration: float = 1.0, sample_rate: int = 44100) -> np.ndarray:
-    """Generate a sine wave array."""
-    t = np.linspace(0, duration, int(sample_rate * duration))
-    return np.sin(2 * np.pi * frequency * t)
+@pytest.fixture
+def generate_sine_wave():
+    """Generate sine wave for testing."""
+    def _generate(frequency=440.0, duration=1.0, sample_rate=44100):
+        t = np.linspace(0, duration, int(sample_rate * duration))
+        samples = np.sin(2 * np.pi * frequency * t)
+        return (samples * 32767).astype(np.int16)
+    return _generate
 
 def save_wav(filename: Path, audio_data: np.ndarray, channels: int = 1, sample_rate: int = 44100) -> None:
     """Save audio data as WAV file."""
@@ -35,20 +39,26 @@ def temp_dir(tmp_path_factory) -> Path:
     return test_dir
 
 @pytest.fixture
-def sample_wav_file(temp_dir: Path) -> Path:
-    """Create a simple test WAV file."""
-    wav_path = temp_dir / "test.wav"
-    audio_data = generate_sine_wave(440, 1.0)
-    save_wav(wav_path, audio_data)
+def sample_wav_file(tmp_path, generate_sine_wave):
+    """Create test WAV file with known content."""
+    wav_path = tmp_path / "test.wav"
+    samples = generate_sine_wave()
+    
+    with wave.open(str(wav_path), 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(44100)
+        wav_file.writeframes(samples.tobytes())
+    
     return wav_path
 
 @pytest.fixture
-def sample_clip(sample_wav_file: Path) -> Clip:
-    """Create a sample clip instance."""
+def sample_clip(sample_wav_file):
+    """Create test clip with known audio."""
     return Clip(
         name="test_clip",
         position=0.0,
-        duration=2.0,  # Fixed duration to match test expectations
+        duration=1.0,
         color="#FF0000",
         source_path=sample_wav_file,
         volume=1.0,
@@ -84,3 +94,28 @@ def cleanup_temp_files(temp_dir: Path):
     yield
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
+
+@pytest.fixture
+def flp_file_content():
+    """Generate minimal valid FLP file content."""
+    header = (
+        b"FLhd"  # Magic
+        b"\x06\x00\x00\x00"  # Header size
+        b"\x00\x00"  # Format version
+        b"\x01\x00"  # Number of channels
+        b"\x60\x00"  # PPQ (96)
+    )
+    
+    data = (
+        b"FLdt"  # Data chunk magic
+        b"\x00\x00\x00\x00"  # Empty data chunk
+    )
+    
+    return header + data
+
+@pytest.fixture
+def sample_project_path(tmp_path, flp_file_content):
+    """Create sample FLP file for testing."""
+    project_file = tmp_path / "test_project.flp"
+    project_file.write_bytes(flp_file_content)
+    return project_file

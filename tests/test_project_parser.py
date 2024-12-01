@@ -1,6 +1,9 @@
 import pytest
+import wave
+import numpy as np
 from pathlib import Path
-import pyflp
+import struct
+from unittest.mock import Mock, patch
 
 from src.core.project_parser import FLProjectParser
 from src.models.project import Project
