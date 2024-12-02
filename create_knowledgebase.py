@@ -38,7 +38,8 @@ excluded_directories = [
     '/.idea/',          # IDE-specific
     '/.gradle/',        # Gradle-specific
     '/__pycache__/',    # Python cache
-    '/venv/',           # Virtual environment
+    '/venv/',    
+    '/venv_new/', # Virtual environment
     '/env/',            # Alternative virtual environment
     '/.pytest_cache/',  # pytest cache
     '/.mypy_cache/',    # mypy cache

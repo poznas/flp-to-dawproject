@@ -6,8 +6,9 @@ A Python-based tool for transferring audio arrangements between FL Studio and Cu
 - Preserves color coding and visual organization
 - Supports multiple arrangements with folder structure
 - Handles large projects (~1000 clips) efficiently
-- Automates the export/import process
+- Automates the export process
 - Preserves audio quality during transfer
+- Generates debugging-friendly XML output
 
 ## Requirements
 - Python 3.8+
@@ -34,22 +35,23 @@ pip install -e .
 ### Dependencies
 Core dependencies are installed automatically:
 - pyflp>=2.0.0 - FL Studio project parsing
-- pyaaf2>=1.7.0 - AAF file handling
 - construct>=2.10.0 - Binary data parsing
 - wave>=0.0.2 - WAV file processing
 - numpy>=1.21.0 - Audio data manipulation
+- lxml>=4.9.0 - XML processing
 
 ## Usage
 
 ### Basic Usage
 ```python
-import flstudio_cubase_migration as fl2cu
-
 # Parse FL Studio project
 project = fl2cu.parse("path/to/project.flp")
 
-# Export to AAF files
-output_files = fl2cu.save(project, "path/to/output")
+# Export to XML files
+output_files = fl2cu.save(project, "path/to/output", format="xml")
+
+# Debug mode with extra logging
+output_files = fl2cu.save(project, "path/to/output", format="xml", debug=True)
 ```
 
 ### Output Structure
@@ -57,11 +59,13 @@ output_files = fl2cu.save(project, "path/to/output")
 output/
   ├── NAGRYWKI_MAIN/
   │   ├── audio_files/
-  │   └── arrangement.aaf
+  │   └── arrangement.xml
   ├── NAGRYWKI_CHOREK/
   │   ├── audio_files/
-  │   └── arrangement.aaf
-  └── ...
+  │   └── arrangement.xml
+  └── debug/
+      ├── parser_logs/
+      └── conversion_data/
 ```
 
 ## Development
@@ -72,7 +76,7 @@ output/
 pytest
 
 # Run specific test file
-pytest tests/test_project_parser.py
+pytest tests/test_xml_generator.py
 
 # Run with coverage report
 pytest --cov=src
@@ -87,7 +91,7 @@ flstudio_cubase_migration/
 │   │   ├── __init__.py
 │   │   ├── project_parser.py     # FL Studio project parsing logic
 │   │   ├── audio_processor.py    # Audio file handling and processing
-│   │   └── aaf_generator.py      # AAF file generation and manipulation
+│   │   └── xml_generator.py      # XML generation and manipulation
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── project.py           # Project data structures
@@ -97,15 +101,20 @@ flstudio_cubase_migration/
 │   │   ├── __init__.py
 │   │   ├── file_manager.py     # File system operations
 │   │   └── logger.py           # Logging configuration
+│   ├── exporters/
+│   │   ├── __init__.py
+│   │   ├── xml_exporter.py     # XML export functionality
+│   │   └── base.py            # Base exporter interface
 │   └── config.py               # Global configuration
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py             # PyTest configuration and shared fixtures
 │   ├── test_project_parser.py  # Project parsing tests
 │   ├── test_audio_processor.py # Audio processing tests
-│   ├── test_aaf_generator.py   # AAF generation tests
+│   ├── test_xml_generator.py   # XML generation tests
 │   ├── test_models.py         # Data model tests
 │   ├── test_file_manager.py   # File system operation tests
+│   ├── test_exporters.py      # Exporter tests
 │   ├── integration/
 │   │   └── test_full_workflow.py # End-to-end workflow tests
 │   └── fixtures/               # Test data and mock files
@@ -115,11 +124,12 @@ flstudio_cubase_migration/
 │       │   ├── clip1.wav
 │       │   └── clip2.wav
 │       └── expected_output/
-│           └── expected_arrangement.aaf
+│           └── expected_arrangement.xml
 ├── examples/
 │   └── sample_project/        # Example project files
 ├── docs/
-│   └── api_reference.md       # API documentation
+│   ├── api_reference.md       # API documentation
+│   └── xml_format.md         # XML format specification
 ├── requirements.txt           # Project dependencies
 ├── dev-requirements.txt       # Development dependencies
 ├── setup.py                  # Installation configuration
@@ -130,7 +140,6 @@ flstudio_cubase_migration/
 ```
 
 ## Known Limitations
-- Cubase's limited AAF color support requires initial setup
 - FL Studio's project format limitations (see PyFLP documentation)
 - Large projects should be processed in chunks (~1000 clips per arrangement)
 

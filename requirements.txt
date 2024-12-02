@@ -1,12 +1,10 @@
 # Core dependencies
 pyflp>=2.0.0      # FL Studio project file parsing
-construct>=2.10.0  # Binary data parsing for AAF generation
-pyaaf2>=1.7.0     # AAF file reading/writing
-sortedcontainers>=2.4.0  # Required by pyflp
-
-# Audio processing
+construct>=2.10.0  # Binary data parsing
 wave>=0.0.2       # WAV file reading/writing
 numpy>=1.21.0     # Audio data manipulation
+lxml>=4.9.0       # XML processing
+xmlschema>=2.5.0  # XML schema validation
 
 # Utility libraries
 tqdm>=4.65.0      # Progress bars for long operations

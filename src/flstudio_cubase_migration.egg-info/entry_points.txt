@@ -1,2 +1,2 @@
 [console_scripts]
-fl2cubase = flstudio_cubase_migration.core.project_parser:main
+fl2cubase = flstudio_cubase_migration.cli:main

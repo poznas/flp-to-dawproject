@@ -2,16 +2,14 @@
 
 from pathlib import Path
 from typing import Union, Dict, Optional
-import logging
-import tempfile
 
-from .core.project_parser import FLProjectParser
-from .core.audio_processor import AudioProcessor
-from .core.aaf_generator import AAFGenerator
-from .models.project import Project
-from .utils.file_manager import FileManager
-from .utils.logger import setup_logger, get_logger
-from .config import Config
+from core.project_parser import FLProjectParser
+from core.audio_processor import AudioProcessor
+from core.xml_generator import XMLGenerator
+from models.project import Project
+from utils.file_manager import FileManager
+from utils.logger import setup_logger, get_logger
+from config import Config
 
 def parse(file: Union[Path, str]) -> Project:
     """Parse an FL Studio project file into a Project model.
@@ -41,16 +39,20 @@ def parse(file: Union[Path, str]) -> Project:
         logger.error(f"Failed to parse project {file_path.name}: {e}")
         raise
 
-def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Union[Path, str]] = None) -> Dict[str, Path]:
-    """Export project arrangements to AAF files with audio.
+def save(project: Project, 
+         output_dir: Union[Path, str], 
+         temp_dir: Optional[Union[Path, str]] = None,
+         debug: bool = False) -> Dict[str, Path]:
+    """Export project arrangements to XML files with audio.
     
     Args:
         project: Project instance to export
         output_dir: Directory for output files
         temp_dir: Optional directory for temporary files (default is system temp)
+        debug: Enable debug output in XML and logs
     
     Returns:
-        Dictionary mapping arrangement names to their AAF file paths
+        Dictionary mapping arrangement names to their XML file paths
     
     Raises:
         ValueError: If project validation fails
@@ -87,12 +89,12 @@ def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Unio
         if not processed_clips:
             raise ValueError("No audio clips were processed successfully")
             
-        # Generate AAF files
-        aaf_paths = {}
+        # Generate XML files
+        xml_paths = {}
         for arrangement in project.arrangements:
             try:
                 arr_dir = arrangement_dirs[arrangement]
-                aaf_path = arr_dir / f"{arrangement.name}.aaf"
+                xml_path = arr_dir / f"{arrangement.name}.xml"
                 
                 # Get relevant processed clips for this arrangement
                 arrangement_clips = {
@@ -100,18 +102,23 @@ def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Unio
                     if clip in arrangement.clips
                 }
                 
-                # Generate AAF
-                generator = AAFGenerator(arrangement, arrangement_clips)
-                generator.generate_aaf(str(aaf_path))
+                # Generate XML
+                generator = XMLGenerator(arrangement, arrangement_clips)
+                generator.generate_xml(str(xml_path))
                 
-                aaf_paths[arrangement.name] = aaf_path
-                logger.info(f"Generated AAF for arrangement: {arrangement.name}")
+                xml_paths[arrangement.name] = xml_path
+                logger.info(f"Generated XML for arrangement: {arrangement.name}")
+                
+                if debug:
+                    debug_dir = output_dir / "debug" / arrangement.name
+                    debug_dir.mkdir(parents=True, exist_ok=True)
+                    generator.generate_debug_info(str(debug_dir))
                 
             except Exception as e:
-                logger.error(f"Failed to generate AAF for arrangement {arrangement.name}: {e}")
+                logger.error(f"Failed to generate XML for arrangement {arrangement.name}: {e}")
                 raise
                 
-        return aaf_paths
+        return xml_paths
         
     finally:
         # Clean up temporary files

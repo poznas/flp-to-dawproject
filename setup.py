@@ -24,6 +24,7 @@ setup(
         "Development Status :: 3 - Alpha",
         "Intended Audience :: End Users/Desktop",
         "Topic :: Multimedia :: Sound/Audio",
+        "Topic :: Text Processing :: Markup :: XML",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "License :: OSI Approved :: MIT License",
@@ -36,7 +37,13 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "fl2cubase=flstudio_cubase_migration.core.project_parser:main",
+            "fl2cubase=flstudio_cubase_migration.cli:main",
+        ],
+    },
+    package_data={
+        "flstudio_cubase_migration": [
+            "schemas/*.xsd",  # XML schemas
+            "templates/*.xml",  # XML templates
         ],
     },
 )

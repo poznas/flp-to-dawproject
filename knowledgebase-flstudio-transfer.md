@@ -61,8 +61,9 @@ A Python-based tool for transferring audio arrangements between FL Studio and Cu
 - Preserves color coding and visual organization
 - Supports multiple arrangements with folder structure
 - Handles large projects (~1000 clips) efficiently
-- Automates the export/import process
+- Automates the export process
 - Preserves audio quality during transfer
+- Generates debugging-friendly XML output
 
 ## Requirements
 - Python 3.8+
@@ -89,21 +90,23 @@ pip install -e .
 ### Dependencies
 Core dependencies are installed automatically:
 - pyflp>=2.0.0 - FL Studio project parsing
-- pyaaf2>=1.7.0 - AAF file handling
 - construct>=2.10.0 - Binary data parsing
 - wave>=0.0.2 - WAV file processing
 - numpy>=1.21.0 - Audio data manipulation
+- lxml>=4.9.0 - XML processing
 
 ## Usage
 
 ### Basic Usage
 ```python
-
 # Parse FL Studio project
 project = fl2cu.parse("path/to/project.flp")
 
-# Export to AAF files
-output_files = fl2cu.save(project, "path/to/output")
+# Export to XML files
+output_files = fl2cu.save(project, "path/to/output", format="xml")
+
+# Debug mode with extra logging
+output_files = fl2cu.save(project, "path/to/output", format="xml", debug=True)
 ```
 
 ### Output Structure
@@ -111,11 +114,13 @@ output_files = fl2cu.save(project, "path/to/output")
 output/
   ├── NAGRYWKI_MAIN/
   │   ├── audio_files/
-  │   └── arrangement.aaf
+  │   └── arrangement.xml
   ├── NAGRYWKI_CHOREK/
   │   ├── audio_files/
-  │   └── arrangement.aaf
-  └── ...
+  │   └── arrangement.xml
+  └── debug/
+      ├── parser_logs/
+      └── conversion_data/
 ```
 
 ## Development
@@ -126,7 +131,7 @@ output/
 pytest
 
 # Run specific test file
-pytest tests/test_project_parser.py
+pytest tests/test_xml_generator.py
 
 # Run with coverage report
 pytest --cov=src
@@ -141,7 +146,7 @@ flstudio_cubase_migration/
 │   │   ├── __init__.py
 │   │   ├── project_parser.py     # FL Studio project parsing logic
 │   │   ├── audio_processor.py    # Audio file handling and processing
-│   │   └── aaf_generator.py      # AAF file generation and manipulation
+│   │   └── xml_generator.py      # XML generation and manipulation
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── project.py           # Project data structures
@@ -151,15 +156,20 @@ flstudio_cubase_migration/
 │   │   ├── __init__.py
 │   │   ├── file_manager.py     # File system operations
 │   │   └── logger.py           # Logging configuration
+│   ├── exporters/
+│   │   ├── __init__.py
+│   │   ├── xml_exporter.py     # XML export functionality
+│   │   └── base.py            # Base exporter interface
 │   └── config.py               # Global configuration
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py             # PyTest configuration and shared fixtures
 │   ├── test_project_parser.py  # Project parsing tests
 │   ├── test_audio_processor.py # Audio processing tests
-│   ├── test_aaf_generator.py   # AAF generation tests
+│   ├── test_xml_generator.py   # XML generation tests
 │   ├── test_models.py         # Data model tests
 │   ├── test_file_manager.py   # File system operation tests
+│   ├── test_exporters.py      # Exporter tests
 │   ├── integration/
 │   │   └── test_full_workflow.py # End-to-end workflow tests
 │   └── fixtures/               # Test data and mock files
@@ -169,11 +179,12 @@ flstudio_cubase_migration/
 │       │   ├── clip1.wav
 │       │   └── clip2.wav
 │       └── expected_output/
-│           └── expected_arrangement.aaf
+│           └── expected_arrangement.xml
 ├── examples/
 │   └── sample_project/        # Example project files
 ├── docs/
-│   └── api_reference.md       # API documentation
+│   ├── api_reference.md       # API documentation
+│   └── xml_format.md         # XML format specification
 ├── requirements.txt           # Project dependencies
 ├── dev-requirements.txt       # Development dependencies
 ├── setup.py                  # Installation configuration
@@ -184,7 +195,6 @@ flstudio_cubase_migration/
 ```
 
 ## Known Limitations
-- Cubase's limited AAF color support requires initial setup
 - FL Studio's project format limitations (see PyFLP documentation)
 - Large projects should be processed in chunks (~1000 clips per arrangement)
 
@@ -195,6 +205,254 @@ Please make sure to update tests as appropriate.
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
+---
+
+#### create_knowledgebase.py
+```
+
+# Essential file types to exclude from content inclusion
+excluded_extensions = {
+    # Image files
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp',       
+    
+    # Document and binary files
+    '.rtf', '.pdf', '.bin', '.lock',               
+    '.jar', '.bat', '.json', '.xml', '.kts',       
+    
+    # Python files
+    '.pyc', '.pyo', '.pyd',                        
+    '.egg', '.egg-info', '.whl',                   
+    '.coverage', '.tox',                           
+    
+    # Audio files
+    '.wav', '.mp3', '.ogg', '.flac', '.aif',
+    '.aiff', '.m4a', '.wma', '.mid', '.midi',
+    
+    # DAW project files
+    '.flp',                                        # FL Studio
+    '.als',                                        # Ableton Live
+    '.ptx', '.ptf',                               # Pro Tools
+    '.cpr',                                        # Cubase
+    '.rpp',                                        # Reaper
+    '.logic', '.logicx',                          # Logic Pro
+    
+    # Common audio plugin formats
+    '.vst', '.vst3', '.dll', '.component',
+    '.au', '.aax',
+}
+
+# Excluded directories
+excluded_directories = [
+    '/.idea/',          # IDE-specific
+    '/.gradle/',        # Gradle-specific
+    '/__pycache__/',    # Python cache
+    '/venv/',    
+    '/venv_new/', # Virtual environment
+    '/env/',            # Alternative virtual environment
+    '/.pytest_cache/',  # pytest cache
+    '/.mypy_cache/',    # mypy cache
+    '/.tox/',           # tox testing
+    '/build/',          # Build directories
+    '/dist/',           # Distribution directories
+    '/site-packages/',  # Installed packages
+    '/lib/python',      # Python library files
+    '/Scripts/',        # Python scripts directory
+    '/Include/',        # Python include directory
+]
+
+# Excluded specific filenames
+excluded_files = {
+    'gradlew', 
+    'gradlew.bat', 
+    '2_stub_out_project.txt',
+    '.gitignore',
+    '.python-version',
+    'pip.conf',
+    'pyvenv.cfg',
+    'MANIFEST.in',
+    'activate',
+    'activate.bat',
+    'activate.ps1',
+    'deactivate.bat'
+}
+
+# Regex patterns
+annotation_pattern = r"^\s*@\w+.*"
+logger_pattern = r"private static final Logger log = LoggerFactory.getLogger\(\w+\.class\);"
+comment_block_start = r"^\s*/\*\*"
+comment_block_end = r"\*/"
+import_pattern = r"^\s*import\s+"
+
+# Python-specific patterns to exclude
+python_patterns = {
+    'env_vars': r"^.*os\.environ\[.*\].*$",
+}
+
+def get_git_tracked_files(directory):
+    """Get a list of all Git-tracked files in the specified directory."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", directory, "ls-files"],
+            stdout=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        tracked_files = result.stdout.splitlines()
+        return [os.path.join(directory, file) for file in tracked_files]
+    except subprocess.CalledProcessError:
+        print(f"Warning: Could not get git tracked files from {directory}")
+        return []
+
+def is_excluded_path(file_path):
+    """Check if file path should be excluded based on various criteria."""
+    normalized_path = file_path.replace("\\", "/").lower()
+    
+    # Check for Python library paths
+    library_indicators = [
+        'site-packages',
+        'dist-packages',
+        'python3',
+        'python2',
+        'pip',
+        'setuptools',
+        'wheel',
+        'lib/python',
+        'scripts/',
+        'include/'
+    ]
+    if any(indicator in normalized_path for indicator in library_indicators):
+        return True
+
+    # Check extension
+    if os.path.splitext(file_path)[1].lower() in excluded_extensions:
+        return True
+
+    # Check filename
+    if os.path.basename(file_path) in excluded_files:
+        return True
+
+    # Check directory path
+    for excluded_dir in excluded_directories:
+        if excluded_dir.lower() in normalized_path:
+            return True
+
+    # Check pip/virtualenv related files
+    if re.search(r'(pip|virtualenv|venv|env).*\.(txt|ini|cfg)$', normalized_path):
+        return True
+
+    return False
+
+def remove_initial_comment(content):
+    """Removes the initial comment if it contains 'File:'."""
+    comment_pattern = r"^(//|#|/\*|\*|<!--)\s*File:\s.*\n"
+    lines = content.splitlines()
+    filtered_lines = []
+    skip = True
+    for line in lines:
+        if skip and re.match(comment_pattern, line):
+            continue
+        else:
+            skip = False
+            filtered_lines.append(line)
+    return "\n".join(filtered_lines)
+
+def filter_content(content):
+    """Applies filters to remove sensitive and unnecessary content."""
+    lines = content.splitlines()
+    filtered_lines = []
+    in_comment_block = False
+
+    for line in lines:
+        stripped_line = line.strip()
+
+        # Skip sensitive content
+        if any(re.match(pattern, stripped_line, re.IGNORECASE) 
+               for pattern in python_patterns.values()):
+            continue
+
+        # Skip annotation lines
+        if re.match(annotation_pattern, stripped_line):
+            continue
+
+        # Skip import lines
+        if re.match(import_pattern, stripped_line):
+            continue
+
+        # Handle comment blocks
+        if re.match(comment_block_start, stripped_line):
+            in_comment_block = True
+            continue
+        if in_comment_block:
+            if re.search(comment_block_end, stripped_line):
+                in_comment_block = False
+            continue
+
+        # Simplify logger lines
+        if re.match(logger_pattern, stripped_line):
+            filtered_lines.append("\tstatic Logger log = ...")
+            continue
+
+        filtered_lines.append(line)
+
+    return "\n".join(filtered_lines)
+
+def format_content(relative_path, content, file_extension):
+    """Formats the file content with appropriate markdown and code block structure."""
+    if file_extension == ".md":
+        formatted_content = f"#### {relative_path}\n{content}\n---\n\n"
+    elif content.startswith("```") and content.endswith("```"):
+        formatted_content = f"#### {relative_path}\n{content}\n---\n\n"
+    else:
+        formatted_content = f"#### {relative_path}\n```\n{content}\n```\n---\n\n"
+    return formatted_content
+
+def process_files(directory, output_file):
+    """Process all files and generate the knowledgebase document."""
+    files_data = []
+    tracked_files = get_git_tracked_files(directory)
+
+    for file_path in tracked_files:
+        if not os.path.exists(file_path):
+            continue
+
+        if is_excluded_path(file_path):
+            continue  # Skip excluded files entirely
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            content = remove_initial_comment(content)
+            content = filter_content(content)
+
+            relative_path = os.path.relpath(file_path, directory)
+            file_extension = os.path.splitext(file_path)[1]
+            files_data.append((relative_path, content, file_extension))
+        except Exception as e:
+            print(f"Error processing {file_path}: {str(e)}")
+            continue
+
+    # Sort files to ensure master_plan.md appears at the top
+    files_data.sort(key=lambda x: (x[0] != 'knowledgebase/master_plan.md', x[0]))
+
+    # Compile final content
+    knowledgebase_content = ""
+    for relative_path, content, file_extension in files_data:
+        knowledgebase_content += format_content(relative_path, content, file_extension)
+
+    # Write compiled content
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(knowledgebase_content)
+
+if __name__ == "__main__":
+    # Define your directory and output file
+    target_module = "flstudio-transfer"
+    directory_to_scan = os.path.join(os.path.expanduser('~'), 'Documents', target_module)
+    output_file = f"knowledgebase-{target_module}.md"
+
+    # Execute the script
+    process_files(directory_to_scan, output_file)
+```
 ---
 
 #### dev-requirements.txt
@@ -209,10 +467,12 @@ pre-commit==3.5.0     # Pre-commit hooks
 # Testing
 pytest>=7.4.3
 pytest-cov>=4.1.0
+pytest-xsd>=0.4.0     # XML schema validation in tests
 
 # Type checking
 types-tqdm>=4.65.0    # Type stubs for tqdm
 types-setuptools>=68.0.0  # Type stubs for setuptools
+types-lxml>=4.9.0     # Type stubs for lxml
 
 # Documentation
 sphinx>=7.1.0         # Documentation generation
@@ -439,21 +699,24 @@ for arrangement in project.arrangements:
 # FL Studio to Cubase Migration Tool
 
 ## Overview
-A Python-based tool to accurately transfer audio arrangements from FL Studio to Cubase while preserving clip positions, colors, and organization across multiple arrangements.
+A Python-based tool to accurately transfer audio arrangements from FL Studio to Cubase while preserving clip positions, colors, and organization across multiple arrangements. Uses XML as an intermediate format for debugging and validation.
 
 ## Objectives
 - Maintain precise clip positions and timing
 - Preserve color coding for visual organization
 - Support multiple arrangements with folder structure
-- Automate the export/import process to minimize manual work
+- Automate the export process to minimize manual work
 - Handle large projects (~1000 clips) efficiently
+- Provide detailed debugging information through XML output
+- Enable easy troubleshooting of conversion issues
 
 ## Technical Stack
 - Core: Python 3.8+
 - FL Studio Project Parsing: PyFLP library
 - Audio Processing: Direct file operations
-- Export Format: AAF (Advanced Authoring Format)
+- Export Format: XML (Extensible Markup Language)
 - Project Structure: Directory-based with arrangement folders
+- XML Processing: lxml library
 
 ## Core Features
 
@@ -465,20 +728,25 @@ A Python-based tool to accurately transfer audio arrangements from FL Studio to 
   - Names (simplified to last component)
   - Length/duration
   - Arrangement association
+- Generate detailed debug logs during parsing
 
 ### 2. Audio Export System
 - Batch audio file export
 - Maintain original audio quality
 - Preserve exact clip boundaries
 - Support for multiple arrangements
+- Audio file validation and verification
 
-### 3. AAF Generation
-- Create AAF files containing:
+### 3. XML Generation
+- Create XML files containing:
   - Clip positions
   - Color information
   - Track organization
   - Timing metadata
-- One AAF file per arrangement
+  - Audio file references
+  - Debug information
+- One XML file per arrangement
+- Human-readable format for easy debugging
 
 ### 4. File Organization
 - Create organized folder structure:
@@ -486,10 +754,15 @@ A Python-based tool to accurately transfer audio arrangements from FL Studio to 
 output/
   ├── NAGRYWKI_MAIN/
   │   ├── audio_files/
-  │   └── arrangement.aaf
+  │   └── arrangement.xml
   ├── NAGRYWKI_CHOREK_VERSE_2/
   │   ├── audio_files/
-  │   └── arrangement.aaf
+  │   └── arrangement.xml
+  ├── debug/
+  │   ├── parser_logs/
+  │   │   └── parsing_debug.log
+  │   └── conversion_data/
+  │       └── metadata_dump.json
   └── ...
 ```
 
@@ -499,38 +772,42 @@ output/
 1. Set up PyFLP project parsing
 2. Implement basic audio file extraction
 3. Create folder structure management
-4. Add logging and error handling
+4. Add comprehensive logging system
+5. Implement XML schema definition
 
-### Phase 2: AAF Generation
-1. Implement AAF metadata generation
+### Phase 2: XML Generation
+1. Implement XML metadata generation
 2. Add clip position mapping
 3. Integrate color preservation
 4. Create track organization structure
+5. Add debugging information
+6. Validate XML against schema
 
-### Phase 3: Optimization & Testing
-1. Optimize for large projects
-2. Add progress reporting
-3. Implement error recovery
-4. Test with various project sizes
+### Phase 3: Debugging & Validation
+1. Add parser debug logs
+2. Implement metadata validation
+3. Create conversion verification tools
+4. Add data integrity checks
+5. Generate human-readable debug output
 
-### Phase 4: Bi-directional Integration
+### Phase 4: Cubase Integration
 1. FL Studio to Cubase:
-   - Test audio export structure
-   - Verify position accuracy
-   - Validate color preservation
-   - Test arrangement organization
+   - Export audio structure
+   - Generate XML format
+   - Document clip properties
+   - Maintain arrangement organization
 
-2. Cubase back to FL Studio:
-   - Parse Cubase project structure
-   - Extract modified clip positions
-   - Capture any color/organization changes
-   - Support reimporting into FL Studio project
-   
-3. Round-trip Workflow Support:
-   - Track version history
-   - Maintain clip relationships
-   - Handle new clips created in Cubase
-   - Preserve both DAWs' specific metadata
+2. XML to Cubase Import:
+   - Create Cubase import templates
+   - Map XML data to Cubase format
+   - Handle color mappings
+   - Support track organization
+
+3. Debugging Support:
+   - Generate detailed logs
+   - Track conversion steps
+   - Validate output accuracy
+   - Provide troubleshooting tools
 
 ## Technical Considerations
 
@@ -538,32 +815,75 @@ output/
 - Batch processing for large projects
 - Efficient memory usage for 1000+ clips
 - Progress tracking for long operations
+- XML generation optimization
 
 ### Error Handling
 - Validate FL Studio project structure
 - Check for missing audio files
 - Handle corrupt project files
 - Provide clear error messages
+- Generate detailed debug logs
+
+### XML Structure
+- Clear, hierarchical organization
+- Human-readable format
+- Comprehensive metadata
+- Validation support
+- Easy debugging access
+
+### Debug Features
+- Detailed parsing logs
+- Conversion step tracking
+- Data validation reports
+- Error location identification
+- XML formatting for readability
 
 ### Compatibility
 - Support FL Studio 20.8+ project format
 - Compatible with Cubase Pro 14
 - Handle various audio formats
+- XML schema versioning
 
 ## Future Expansion Possibilities
 1. GUI interface for easier operation
-2. Additional export formats (OMF, EDL)
+2. Additional export formats
 3. Custom naming scheme configuration
 4. Batch project processing
-5. Integration with other DAWs
+5. Enhanced debugging tools
+6. Real-time conversion monitoring
+7. Advanced error recovery options
 
 ## Known Limitations
-1. Cubase's limited AAF color support requires initial setup
-2. No native FL Studio API access
-3. Need to handle large project sizes carefully
+1. FL Studio's limited API access requires parsing workarounds
+2. Need to handle large project sizes carefully
+3. XML file size may grow with project complexity
 
 ## Usage Instructions
-[To be developed based on implementation]
+```python
+# Basic usage
+project = fl2cu.parse("project.flp")
+fl2cu.save(project, "output_dir", format="xml")
+
+# Debug mode
+fl2cu.save(project, "output_dir", format="xml", debug=True)
+
+# XML validation
+fl2cu.validate_xml("output_dir/arrangement.xml")
+```
+
+## Debug Tools
+1. XML validation tool
+2. Parsing log analyzer
+3. Conversion step tracker
+4. Audio file validator
+5. Data integrity checker
+
+## Documentation
+1. XML schema reference
+2. Debug log interpretation guide
+3. Error code documentation
+4. Troubleshooting procedures
+5. Common issues and solutions
 ---
 
 #### mypy.ini
@@ -636,13 +956,11 @@ markers =
 ```
 # Core dependencies
 pyflp>=2.0.0      # FL Studio project file parsing
-construct>=2.10.0  # Binary data parsing for AAF generation
-pyaaf2>=1.7.0     # AAF file reading/writing
-sortedcontainers>=2.4.0  # Required by pyflp
-
-# Audio processing
+construct>=2.10.0  # Binary data parsing
 wave>=0.0.2       # WAV file reading/writing
 numpy>=1.21.0     # Audio data manipulation
+lxml>=4.9.0       # XML processing
+xmlschema>=2.5.0  # XML schema validation
 
 # Utility libraries
 tqdm>=4.65.0      # Progress bars for long operations
@@ -679,6 +997,7 @@ setup(
         "Development Status :: 3 - Alpha",
         "Intended Audience :: End Users/Desktop",
         "Topic :: Multimedia :: Sound/Audio",
+        "Topic :: Text Processing :: Markup :: XML",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "License :: OSI Approved :: MIT License",
@@ -691,7 +1010,13 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "fl2cubase=flstudio_cubase_migration.core.project_parser:main",
+            "fl2cubase=flstudio_cubase_migration.cli:main",
+        ],
+    },
+    package_data={
+        "flstudio_cubase_migration": [
+            "schemas/*.xsd",  # XML schemas
+            "templates/*.xml",  # XML templates
         ],
     },
 )
@@ -705,13 +1030,13 @@ setup(
 from pathlib import Path
 from typing import Union, Dict, Optional
 
-from .core.project_parser import FLProjectParser
-from .core.audio_processor import AudioProcessor
-from .core.aaf_generator import AAFGenerator
-from .models.project import Project
-from .utils.file_manager import FileManager
-from .utils.logger import setup_logger, get_logger
-from .config import Config
+from core.project_parser import FLProjectParser
+from core.audio_processor import AudioProcessor
+from core.xml_generator import XMLGenerator
+from models.project import Project
+from utils.file_manager import FileManager
+from utils.logger import setup_logger, get_logger
+from config import Config
 
 def parse(file: Union[Path, str]) -> Project:
     """Parse an FL Studio project file into a Project model.
@@ -741,16 +1066,20 @@ def parse(file: Union[Path, str]) -> Project:
         logger.error(f"Failed to parse project {file_path.name}: {e}")
         raise
 
-def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Union[Path, str]] = None) -> Dict[str, Path]:
-    """Export project arrangements to AAF files with audio.
+def save(project: Project, 
+         output_dir: Union[Path, str], 
+         temp_dir: Optional[Union[Path, str]] = None,
+         debug: bool = False) -> Dict[str, Path]:
+    """Export project arrangements to XML files with audio.
     
     Args:
         project: Project instance to export
         output_dir: Directory for output files
         temp_dir: Optional directory for temporary files (default is system temp)
+        debug: Enable debug output in XML and logs
     
     Returns:
-        Dictionary mapping arrangement names to their AAF file paths
+        Dictionary mapping arrangement names to their XML file paths
     
     Raises:
         ValueError: If project validation fails
@@ -787,12 +1116,12 @@ def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Unio
         if not processed_clips:
             raise ValueError("No audio clips were processed successfully")
             
-        # Generate AAF files
-        aaf_paths = {}
+        # Generate XML files
+        xml_paths = {}
         for arrangement in project.arrangements:
             try:
                 arr_dir = arrangement_dirs[arrangement]
-                aaf_path = arr_dir / f"{arrangement.name}.aaf"
+                xml_path = arr_dir / f"{arrangement.name}.xml"
                 
                 # Get relevant processed clips for this arrangement
                 arrangement_clips = {
@@ -800,18 +1129,23 @@ def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Unio
                     if clip in arrangement.clips
                 }
                 
-                # Generate AAF
-                generator = AAFGenerator(arrangement, arrangement_clips)
-                generator.generate_aaf(str(aaf_path))
+                # Generate XML
+                generator = XMLGenerator(arrangement, arrangement_clips)
+                generator.generate_xml(str(xml_path))
                 
-                aaf_paths[arrangement.name] = aaf_path
-                logger.info(f"Generated AAF for arrangement: {arrangement.name}")
+                xml_paths[arrangement.name] = xml_path
+                logger.info(f"Generated XML for arrangement: {arrangement.name}")
+                
+                if debug:
+                    debug_dir = output_dir / "debug" / arrangement.name
+                    debug_dir.mkdir(parents=True, exist_ok=True)
+                    generator.generate_debug_info(str(debug_dir))
                 
             except Exception as e:
-                logger.error(f"Failed to generate AAF for arrangement {arrangement.name}: {e}")
+                logger.error(f"Failed to generate XML for arrangement {arrangement.name}: {e}")
                 raise
                 
-        return aaf_paths
+        return xml_paths
         
     finally:
         # Clean up temporary files
@@ -820,451 +1154,6 @@ def save(project: Project, output_dir: Union[Path, str], temp_dir: Optional[Unio
 
 # Initialize logger
 setup_logger()
-```
----
-
-#### src\config.py
-```
-# File: src/config.py
-"""
-Global configuration settings.
-
-Filepath: src/config.py
-"""
-from pathlib import Path
-from typing import Dict, List, Any
-
-class Config:
-    """Global configuration settings for FL Studio to Cubase migration"""
-    
-    # File system settings
-    DEFAULT_OUTPUT_DIR: Path = Path('./output')
-    TEMP_DIR: Path = Path('./temp')
-    
-    # Audio settings
-    SUPPORTED_AUDIO_FORMATS: List[str] = ['.wav']
-    MAX_AUDIO_CHANNELS: int = 2
-    SAMPLE_RATE: int = 44100
-    BIT_DEPTH: int = 24
-    
-    # Project constraints
-    MAX_CLIPS_PER_ARRANGEMENT: int = 1000
-    MAX_ARRANGEMENTS: int = 50
-    
-    # Version requirements
-    MIN_FL_STUDIO_VERSION: str = '20.8.0'
-    MIN_CUBASE_VERSION: str = '14.0.0'
-    
-    # AAF settings
-    AAF_VERSION: str = '1.1'
-    SUPPORTED_COLOR_FORMATS: List[str] = ['RGB', 'HEX']
-    
-    # Performance settings
-    BATCH_SIZE: int = 100  # Number of clips to process at once
-    MAX_PARALLEL_EXPORTS: int = 4
-    
-    def get_output_dir(cls, project_name: str) -> Path:
-        """Get project-specific output directory"""
-        return cls.DEFAULT_OUTPUT_DIR / project_name
-    
-    def get_temp_dir(cls, project_name: str) -> Path:
-        """Get project-specific temporary directory"""
-        return cls.TEMP_DIR / project_name
-    
-    def to_dict(cls) -> Dict[str, Any]:
-        """Convert configuration to dictionary for serialization"""
-        return {
-            name: value for name, value in vars(cls).items()
-            if not name.startswith('_') and name.isupper()
-        }
-```
----
-
-#### src\core\__init__.py
-```
-"""Core package for FL Studio to Cubase migration tool."""
-
-from .project_parser import FLProjectParser
-from .audio_processor import AudioProcessor
-from .aaf_generator import AAFGenerator
-
-__all__ = ['FLProjectParser', 'AudioProcessor', 'AAFGenerator']
-```
----
-
-#### src\core\aaf_generator.py
-```
-from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..models.arrangement import Arrangement
-    from ..models.clip import Clip
-
-class AAFGenerator:
-    """Generates AAF files for Cubase import with clip positions and metadata."""
-    
-    def __init__(self, arrangement: "Arrangement", audio_file_map: Dict["Clip", Path]):
-        """Initialize AAF generator.
-        
-        Args:
-            arrangement: Arrangement to process
-            audio_file_map: Mapping of clips to their exported audio file paths
-        """
-        self.arrangement = arrangement
-        self.audio_file_map = {
-            hash(clip): path for clip, path in audio_file_map.items()
-        }  # Store using clip hashes since Clip is now immutable
-        from ..utils.logger import get_logger
-        self.logger = get_logger()
-        
-    def generate_aaf(self, output_path: str) -> None:
-        """Generate AAF file for arrangement.
-        
-        Args:
-            output_path: Path where AAF file should be created
-            
-        Raises:
-            FileNotFoundError: If audio files are missing
-            OSError: If AAF generation fails
-        """
-        output_path = Path(output_path)
-        
-        try:
-            with aaf2.open(str(output_path), 'w') as f:
-                # Create main composition
-                main_composition = f.create.MasterMob(self.arrangement.name)
-                f.content.mobs.append(main_composition)
-                
-                # Set basic project properties
-                edit_rate = 25  # Standard frame rate 
-                
-                # Create tape source (for timecode)
-                tape_mob = f.create.SourceMob()
-                f.content.mobs.append(tape_mob)
-                timecode_rate = 25
-                start_time = 0
-                
-                # Add tape slots
-                tape_mob.create_tape_slots(
-                    "Master", 
-                    edit_rate,
-                    timecode_rate, 
-                    media_kind='picture'
-                )
-                
-                # Process each clip in the arrangement
-                for clip in sorted(self.arrangement.clips, key=lambda x: x.position):
-                    self._add_clip_to_composition(f, main_composition, clip, edit_rate)
-                    
-                self.logger.info(f"Generated AAF file at {output_path}")
-                    
-        except Exception as e:
-            self.logger.error(f"Failed to generate AAF file: {e}")
-            raise
-            
-    def _add_clip_to_composition(self, f: "aaf2.File", composition: "aaf2.MasterMob", 
-                               clip: "Clip", edit_rate: int) -> None:
-        """Add a clip to the AAF composition."""
-        try:
-            # Get the exported audio file path using clip hash
-            audio_path = self.audio_file_map.get(hash(clip))
-            if not audio_path or not audio_path.exists():
-                self.logger.warning(f"Audio file not found for clip {clip.name}, skipping")
-                return
-                
-            # Create source mob for the audio file
-            source_mob = f.create.SourceMob()
-            f.content.mobs.append(source_mob)
-            
-            # Import the audio essence
-            source_mob.import_audio_essence(
-                str(audio_path),
-                edit_rate
-            )
-            
-            # Calculate position and length in edit rate units
-            position_frames = int(clip.position * edit_rate)
-            length_frames = int(clip.duration * edit_rate)
-            
-            # Create the clip reference
-            clip_slot = source_mob.create_source_clip(1, position_frames)
-            clip_slot.length = length_frames
-            
-            # Set clip metadata if supported by AAF version
-            try:
-                if hasattr(clip_slot, 'user_comments'):
-                    clip_slot.user_comments['Name'] = clip.name
-                    clip_slot.user_comments['Color'] = clip.color
-                    if clip.muted:
-                        clip_slot.user_comments['Muted'] = 'true'
-            except Exception as e:
-                self.logger.warning(f"Failed to set clip metadata: {e}")
-                
-            # Apply volume if different from default
-            if clip.volume != 1.0:
-                try:
-                    clip_slot.volume = clip.volume
-                except Exception as e:
-                    self.logger.warning(f"Failed to set clip volume: {e}")
-                    
-        except Exception as e:
-            self.logger.error(f"Failed to add clip {clip.name} to AAF: {e}")
-            raise
-```
----
-
-#### src\core\audio_processor.py
-```
-from pathlib import Path
-from typing import List, Dict, Optional
-from concurrent.futures import ThreadPoolExecutor
-
-from ..models.clip import Clip
-from ..utils.logger import get_logger
-from ..config import Config
-
-class AudioProcessor:
-    """Handles audio file operations including export and quality preservation."""
-    
-    def __init__(self, output_dir: str):
-        self.output_dir = Path(output_dir)
-        self.logger = get_logger()
-        self.config = Config()
-        
-        # Ensure output directory exists
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-    def export_audio_clips(self, clips: List[Clip], max_workers: Optional[int] = None) -> Dict[Clip, Path]:
-        """Export audio clips while preserving quality.
-        Returns a dictionary mapping clips to their exported file paths."""
-        
-        result: Dict[Clip, Path] = {}
-        failed_clips = []
-        max_workers = max_workers or self.config.MAX_PARALLEL_EXPORTS
-
-        # Process clips in parallel for better performance
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_clip = {
-                executor.submit(self._process_clip, clip): clip 
-                for clip in clips 
-                if clip.source_path and clip.source_path.exists()
-            }
-            
-            for future in future_to_clip:
-                clip = future_to_clip[future]
-                try:
-                    output_path = future.result()
-                    if output_path:
-                        result[clip] = output_path
-                    else:
-                        failed_clips.append(clip)
-                except Exception as e:
-                    self.logger.error(f"Failed to process clip {clip.name}: {e}")
-                    failed_clips.append(clip)
-
-        if failed_clips:
-            self.logger.warning(f"Failed to process {len(failed_clips)} clips")
-            
-        return result
-        
-    def _process_clip(self, clip: Clip) -> Optional[Path]:
-        """Process a single audio clip."""
-        try:
-            source_path = clip.source_path
-            if not source_path or not source_path.exists():
-                raise FileNotFoundError(f"Source file not found: {source_path}")
-
-            # Create unique output path
-            output_path = self.output_dir / f"{clip.name}_{clip.source_path.stem}.wav"
-            i = 1
-            while output_path.exists():
-                output_path = self.output_dir / f"{clip.name}_{clip.source_path.stem}_{i}.wav"
-                i += 1
-
-            # For WAV files, we can optimize by copying if no processing is needed
-            if source_path.suffix.lower() == '.wav' and clip.volume == 1.0 and not clip.muted:
-                shutil.copy2(source_path, output_path)
-                self.logger.debug(f"Copied {clip.name} to {output_path}")
-                return output_path
-
-            # Otherwise, process the audio data
-            with wave.open(str(source_path), 'rb') as wav_in:
-                params = wav_in.getparams()
-                frames = wav_in.readframes(wav_in.getnframes())
-
-                if clip.volume != 1.0 or clip.muted:
-                    audio_data = np.frombuffer(frames, dtype=np.int16)
-                    volume = 0.0 if clip.muted else clip.volume
-                    audio_data = (audio_data * volume).astype(np.int16)
-                    frames = audio_data.tobytes()
-
-                with wave.open(str(output_path), 'wb') as wav_out:
-                    wav_out.setparams(params)
-                    wav_out.writeframes(frames)
-
-            self.logger.debug(f"Processed {clip.name} to {output_path}")
-            return output_path
-
-        except Exception as e:
-            self.logger.error(f"Error processing clip {clip.name}: {e}")
-            return None
-
-    def validate_audio_files(self, clips: List[Clip]) -> bool:
-        """Validate all audio files in the output directory."""
-        all_valid = True
-        
-        for clip in clips:
-            if not clip.source_path:
-                self.logger.error(f"No source path for clip {clip.name}")
-                all_valid = False
-                continue
-
-            try:
-                with wave.open(str(clip.source_path), 'rb') as wav:
-                    if wav.getnframes() == 0:
-                        self.logger.error(f"Empty audio file for clip {clip.name}")
-                        all_valid = False
-            except Exception as e:
-                self.logger.error(f"Invalid audio file for clip {clip.name}: {e}")
-                all_valid = False
-                
-        return all_valid
-```
----
-
-#### src\core\project_parser.py
-```
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-
-from ..models.project import Project
-from ..models.arrangement import Arrangement
-from ..models.clip import Clip
-from ..utils.logger import get_logger
-
-class FLProjectParser:
-    """Handles parsing of FL Studio project files using PyFLP library."""
-    
-    def __init__(self, project_path: str):
-        self.project_path = Path(project_path)
-        self.logger = get_logger()
-        
-        if not self.project_path.exists():
-            raise FileNotFoundError(f"Project file not found: {project_path}")
-            
-        try:
-            self.fl_project = pyflp.parse(str(self.project_path))
-            self.logger.info(f"Successfully opened FL Studio project: {self.project_path.name}")
-        except Exception as e:
-            self.logger.error(f"Failed to parse FL Studio project: {e}")
-            raise
-            
-    def parse_project(self) -> Project:
-        """Parse FL Studio project and extract metadata."""
-        project = Project(
-            name=self.project_path.stem,
-            source_path=self.project_path
-        )
-        
-        try:
-            # Parse arrangements
-            arrangements = self.extract_arrangements()
-            for arrangement in arrangements:
-                project.add_arrangement(arrangement)
-                
-            self.logger.info(f"Parsed {len(arrangements)} arrangements")
-            return project
-            
-        except Exception as e:
-            self.logger.error(f"Error parsing project: {e}")
-            raise
-            
-    def extract_arrangements(self) -> List[Arrangement]:
-        """Extract arrangement information from FL Studio project."""
-        arrangements = []
-
-        try:
-            # Get playlist tracks
-            playlist_tracks = self.fl_project.tracks if hasattr(self.fl_project, 'tracks') else []
-            
-            # Create default arrangement
-            default_arrangement = Arrangement(name="Main")
-            arrangements.append(default_arrangement)
-
-            # Process each channel
-            for channel in self.fl_project.channels.samplers:
-                if not channel.sample_path:
-                    continue
-
-                # Get patterns containing this channel
-                patterns = []
-                if hasattr(channel, 'patterns'):
-                    patterns = channel.patterns
-                elif hasattr(channel, 'pattern'):
-                    patterns = [channel.pattern] if channel.pattern else []
-
-                # Calculate position based on pattern placement
-                for pattern_idx in patterns:
-                    # Try to find pattern in playlist
-                    position = 0.0
-                    for track in playlist_tracks:
-                        for item in track.items:
-                            if item.pattern == pattern_idx:
-                                position = self._ticks_to_seconds(item.position)
-                                break
-
-                    # Create clip
-                    clip = Clip(
-                        name=channel.name or Path(channel.sample_path).stem,
-                        position=position,
-                        duration=self._ticks_to_seconds(channel.length if hasattr(channel, 'length') else 0),
-                        color=f"#{channel.color:06x}" if hasattr(channel, 'color') and channel.color else "#808080",
-                        source_path=Path(channel.sample_path),
-                        volume=channel.volume if hasattr(channel, 'volume') else 1.0,
-                        muted=channel.muted if hasattr(channel, 'muted') else False
-                    )
-
-                    # Add to appropriate arrangement
-                    if hasattr(channel, 'group') and channel.group:
-                        arrangement = self._get_or_create_arrangement(arrangements, str(channel.group))
-                    else:
-                        arrangement = default_arrangement
-                    arrangement.add_clip(clip)
-
-            return arrangements
-
-        except Exception as e:
-            self.logger.error(f"Error extracting arrangements: {e}")
-            raise
-
-    def _ticks_to_seconds(self, ticks: int) -> float:
-        """Convert FL Studio ticks to seconds."""
-        if not hasattr(self.fl_project, 'ppq') or not hasattr(self.fl_project, 'tempo'):
-            return 0.0
-            
-        ticks_per_second = self.fl_project.ppq * (self.fl_project.tempo / 60.0)
-        return ticks / ticks_per_second if ticks_per_second > 0 else 0.0
-
-    def _get_or_create_arrangement(self, arrangements: List[Arrangement], name: str) -> Arrangement:
-        """Get existing arrangement or create new one."""
-        for arrangement in arrangements:
-            if arrangement.name == name:
-                return arrangement
-                
-        new_arrangement = Arrangement(name=name)
-        arrangements.append(new_arrangement)
-        return new_arrangement
-
-    def _get_arrangement_name(self, channel: Any) -> str:
-        """Determine arrangement name from channel properties."""
-        if hasattr(channel, 'group') and channel.group:
-            return str(channel.group)
-            
-        if hasattr(channel, 'pattern') and channel.pattern:
-            return f"Pattern_{channel.pattern}"
-            
-        return "Main"
 ```
 ---
 
@@ -1280,6 +1169,7 @@ Author-email: your.email@example.com
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: End Users/Desktop
 Classifier: Topic :: Multimedia :: Sound/Audio
+Classifier: Topic :: Text Processing :: Markup :: XML
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.8
 Classifier: License :: OSI Approved :: MIT License
@@ -1288,10 +1178,10 @@ Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 Requires-Dist: pyflp>=2.0.0
 Requires-Dist: construct>=2.10.0
-Requires-Dist: pyaaf2>=1.7.0
-Requires-Dist: sortedcontainers>=2.4.0
 Requires-Dist: wave>=0.0.2
 Requires-Dist: numpy>=1.21.0
+Requires-Dist: lxml>=4.9.0
+Requires-Dist: xmlschema>=2.5.0
 Requires-Dist: tqdm>=4.65.0
 Requires-Dist: pathlib>=1.0.1
 Requires-Dist: typing-extensions>=4.5.0
@@ -1303,24 +1193,99 @@ Requires-Dist: isort==5.12.0; extra == "dev"
 Requires-Dist: pre-commit==3.5.0; extra == "dev"
 Requires-Dist: pytest>=7.4.3; extra == "dev"
 Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-xsd>=0.4.0; extra == "dev"
 Requires-Dist: types-tqdm>=4.65.0; extra == "dev"
 Requires-Dist: types-setuptools>=68.0.0; extra == "dev"
+Requires-Dist: types-lxml>=4.9.0; extra == "dev"
 Requires-Dist: sphinx>=7.1.0; extra == "dev"
 Requires-Dist: sphinx-rtd-theme>=2.0.0; extra == "dev"
 
-# File: README.md
 # FL Studio to Cubase Migration Tool
 A Python-based tool for transferring audio arrangements between FL Studio and Cubase while preserving clip positions, colors, and organization.
 
+## Features
+- Maintains precise clip positions and timing 
+- Preserves color coding and visual organization
+- Supports multiple arrangements with folder structure
+- Handles large projects (~1000 clips) efficiently
+- Automates the export process
+- Preserves audio quality during transfer
+- Generates debugging-friendly XML output
+
+## Requirements
+- Python 3.8+
+- FL Studio project files (.flp)
+- Cubase Pro 14+ (for importing)
+
 ## Installation
-[TODO: Add installation instructions]
+
+### Development Setup
+```batch
+# Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate  # On Windows
+source venv/bin/activate  # On Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -r dev-requirements.txt
+
+# Install package in editable mode
+pip install -e .
+```
+
+### Dependencies
+Core dependencies are installed automatically:
+- pyflp>=2.0.0 - FL Studio project parsing
+- construct>=2.10.0 - Binary data parsing
+- wave>=0.0.2 - WAV file processing
+- numpy>=1.21.0 - Audio data manipulation
+- lxml>=4.9.0 - XML processing
 
 ## Usage
-[TODO: Add usage instructions]
 
-## Project Structure
+### Basic Usage
+```python
+# Parse FL Studio project
+project = fl2cu.parse("path/to/project.flp")
 
+# Export to XML files
+output_files = fl2cu.save(project, "path/to/output", format="xml")
 
+# Debug mode with extra logging
+output_files = fl2cu.save(project, "path/to/output", format="xml", debug=True)
+```
+
+### Output Structure
+```
+output/
+  ├── NAGRYWKI_MAIN/
+  │   ├── audio_files/
+  │   └── arrangement.xml
+  ├── NAGRYWKI_CHOREK/
+  │   ├── audio_files/
+  │   └── arrangement.xml
+  └── debug/
+      ├── parser_logs/
+      └── conversion_data/
+```
+
+## Development
+
+### Running Tests
+```batch
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/test_xml_generator.py
+
+# Run with coverage report
+pytest --cov=src
+```
+
+### Project Structure
+```
 flstudio_cubase_migration/
 ├── src/
 │   ├── __init__.py
@@ -1328,7 +1293,7 @@ flstudio_cubase_migration/
 │   │   ├── __init__.py
 │   │   ├── project_parser.py     # FL Studio project parsing logic
 │   │   ├── audio_processor.py    # Audio file handling and processing
-│   │   └── aaf_generator.py      # AAF file generation and manipulation
+│   │   └── xml_generator.py      # XML generation and manipulation
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── project.py           # Project data structures
@@ -1338,15 +1303,20 @@ flstudio_cubase_migration/
 │   │   ├── __init__.py
 │   │   ├── file_manager.py     # File system operations
 │   │   └── logger.py           # Logging configuration
+│   ├── exporters/
+│   │   ├── __init__.py
+│   │   ├── xml_exporter.py     # XML export functionality
+│   │   └── base.py            # Base exporter interface
 │   └── config.py               # Global configuration
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py             # PyTest configuration and shared fixtures
 │   ├── test_project_parser.py  # Project parsing tests
 │   ├── test_audio_processor.py # Audio processing tests
-│   ├── test_aaf_generator.py   # AAF generation tests
+│   ├── test_xml_generator.py   # XML generation tests
 │   ├── test_models.py         # Data model tests
 │   ├── test_file_manager.py   # File system operation tests
+│   ├── test_exporters.py      # Exporter tests
 │   ├── integration/
 │   │   └── test_full_workflow.py # End-to-end workflow tests
 │   └── fixtures/               # Test data and mock files
@@ -1356,18 +1326,32 @@ flstudio_cubase_migration/
 │       │   ├── clip1.wav
 │       │   └── clip2.wav
 │       └── expected_output/
-│           └── expected_arrangement.aaf
+│           └── expected_arrangement.xml
 ├── examples/
 │   └── sample_project/        # Example project files
 ├── docs/
-│   └── api_reference.md       # API documentation
+│   ├── api_reference.md       # API documentation
+│   └── xml_format.md         # XML format specification
 ├── requirements.txt           # Project dependencies
-├── dev-requirements.txt     # Development dependencies
-├── setup.py                 # Installation configuration
-├── pytest.ini              # Test configuration
-├── .pylintrc              # Pylint configuration
-├── mypy.ini               # Type checking configuration
+├── dev-requirements.txt       # Development dependencies
+├── setup.py                  # Installation configuration
+├── pytest.ini               # Test configuration
+├── .pylintrc               # Pylint configuration
+├── mypy.ini                # Type checking configuration
 └── pyproject.toml         # Code formatting and build configuration
+```
+
+## Known Limitations
+- FL Studio's project format limitations (see PyFLP documentation)
+- Large projects should be processed in chunks (~1000 clips per arrangement)
+
+## Contributing
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+Please make sure to update tests as appropriate.
+
+## License
+[MIT](https://choosealicense.com/licenses/mit/)
 ```
 ---
 
@@ -1376,23 +1360,28 @@ flstudio_cubase_migration/
 README.md
 pyproject.toml
 setup.py
-src/core/__init__.py
-src/core/aaf_generator.py
-src/core/audio_processor.py
-src/core/project_parser.py
+src/fl2cu/__init__.py
+src/fl2cu/__main__.py
+src/fl2cu/config.py
+src/fl2cu/core/__init__.py
+src/fl2cu/core/aaf_generator.py
+src/fl2cu/core/audio_processor.py
+src/fl2cu/core/project_parser.py
+src/fl2cu/core/xml_generator.py
+src/fl2cu/models/__init__.py
+src/fl2cu/models/arrangement.py
+src/fl2cu/models/base.py
+src/fl2cu/models/clip.py
+src/fl2cu/models/project.py
+src/fl2cu/utils/__init__.py
+src/fl2cu/utils/file_manager.py
+src/fl2cu/utils/logger.py
 src/flstudio_cubase_migration.egg-info/PKG-INFO
 src/flstudio_cubase_migration.egg-info/SOURCES.txt
 src/flstudio_cubase_migration.egg-info/dependency_links.txt
 src/flstudio_cubase_migration.egg-info/entry_points.txt
 src/flstudio_cubase_migration.egg-info/requires.txt
 src/flstudio_cubase_migration.egg-info/top_level.txt
-src/models/__init__.py
-src/models/arrangement.py
-src/models/clip.py
-src/models/project.py
-src/utils/__init__.py
-src/utils/file_manager.py
-src/utils/logger.py
 tests/test_aaf_generator.py
 tests/test_audio_processor.py
 tests/test_file_manager.py
@@ -1410,7 +1399,7 @@ tests/test_project_parser.py
 #### src\flstudio_cubase_migration.egg-info\entry_points.txt
 ```
 [console_scripts]
-fl2cubase = flstudio_cubase_migration.core.project_parser:main
+fl2cubase = flstudio_cubase_migration.cli:main
 ```
 ---
 
@@ -1418,10 +1407,10 @@ fl2cubase = flstudio_cubase_migration.core.project_parser:main
 ```
 pyflp>=2.0.0
 construct>=2.10.0
-pyaaf2>=1.7.0
-sortedcontainers>=2.4.0
 wave>=0.0.2
 numpy>=1.21.0
+lxml>=4.9.0
+xmlschema>=2.5.0
 tqdm>=4.65.0
 pathlib>=1.0.1
 typing-extensions>=4.5.0
@@ -1434,8 +1423,10 @@ isort==5.12.0
 pre-commit==3.5.0
 pytest>=7.4.3
 pytest-cov>=4.1.0
+pytest-xsd>=0.4.0
 types-tqdm>=4.65.0
 types-setuptools>=68.0.0
+types-lxml>=4.9.0
 sphinx>=7.1.0
 sphinx-rtd-theme>=2.0.0
 ```
@@ -1443,612 +1434,7 @@ sphinx-rtd-theme>=2.0.0
 
 #### src\flstudio_cubase_migration.egg-info\top_level.txt
 ```
-core
-models
-utils
-```
----
-
-#### src\models\__init__.py
-```
-"""Models package for FL Studio to Cubase migration tool.
-
-This package contains the core data models used to represent FL Studio projects,
-arrangements, and clips during the migration process.
-"""
-
-from .clip import Clip
-from .arrangement import Arrangement
-from .project import Project
-
-__all__ = ['Clip', 'Arrangement', 'Project']
-```
----
-
-#### src\models\arrangement.py
-```
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-from pathlib import Path
-
-from .clip import Clip
-
-class Arrangement:
-    """Represents an arrangement containing multiple audio clips."""
-    
-    name: str
-    clips: List[Clip] = field(default_factory=list)
-    folder_path: Optional[Path] = None
-    
-    def add_clip(self, clip: Clip) -> None:
-        """Add a clip to the arrangement."""
-        # Since Clip is now immutable, we need to create a new one with the arrangement name
-        new_clip = Clip(
-            name=clip.name,
-            position=clip.position,
-            duration=clip.duration,
-            color=clip.color,
-            source_path=clip.source_path,
-            volume=clip.volume,
-            muted=clip.muted,
-            arrangement_name=self.name
-        )
-        self.clips.append(new_clip)
-        
-    def remove_clip(self, clip: Clip) -> None:
-        """Remove a clip from the arrangement."""
-        self.clips = [c for c in self.clips if c != clip]
-            
-    def get_clip_by_name(self, name: str) -> Optional[Clip]:
-        """Find a clip by its name."""
-        for clip in self.clips:
-            if clip.name == name:
-                return clip
-        return None
-        
-    def get_duration(self) -> float:
-        """Get total arrangement duration based on clip positions."""
-        if not self.clips:
-            return 0.0
-            
-        # Calculate end time for each clip (position + duration)
-        end_times = [clip.position + clip.duration for clip in self.clips]
-        return max(end_times) if end_times else 0.0
-    
-    def validate(self) -> None:
-        """Validate arrangement and all its clips."""
-        if not self.name:
-            raise ValueError("Arrangement name cannot be empty")
-            
-        # Validate each clip
-        for clip in self.clips:
-            # Clip is now validated on creation due to dataclass post_init
-            
-            # Verify clip belongs to this arrangement
-            if clip.arrangement_name != self.name:
-                raise ValueError(f"Clip {clip.name} has incorrect arrangement assignment")
-            
-        # Check for clip name uniqueness
-        names = [clip.name for clip in self.clips]
-        if len(names) != len(set(names)):
-            raise ValueError("Duplicate clip names are not allowed")
-            
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert arrangement to dictionary format for serialization."""
-        return {
-            'name': self.name,
-            'folder_path': str(self.folder_path) if self.folder_path else None,
-            'clips': [clip.__dict__ for clip in self.clips]
-        }
-    
-    def from_dict(cls, data: Dict[str, Any]) -> 'Arrangement':
-        """Create arrangement instance from dictionary data."""
-        folder_path = Path(data['folder_path']) if data.get('folder_path') else None
-        
-        arrangement = cls(
-            name=data['name'],
-            folder_path=folder_path
-        )
-        
-        # Add clips
-        for clip_data in data.get('clips', []):
-            clip = Clip(
-                name=clip_data['name'],
-                position=clip_data['position'],
-                duration=clip_data['duration'],
-                color=clip_data['color'],
-                source_path=Path(clip_data['source_path']) if clip_data.get('source_path') else None,
-                volume=clip_data.get('volume', 1.0),
-                muted=clip_data.get('muted', False),
-                arrangement_name=clip_data.get('arrangement_name')
-            )
-            arrangement.add_clip(clip)
-            
-        return arrangement
-```
----
-
-#### src\models\clip.py
-```
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, Dict, Any
-
-class Clip:
-    """Represents an audio clip with position, duration and color information."""
-    
-    # Required fields
-    name: str
-    position: float  # Position in seconds
-    duration: float  # Duration in seconds 
-    color: str      # Color in hex format (#RRGGBB)
-    
-    # Optional fields with defaults
-    source_path: Optional[Path] = None
-    volume: float = 1.0
-    muted: bool = False
-    arrangement_name: Optional[str] = None
-    
-    # Internal state
-    _metadata: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        """Validate clip attributes after initialization."""
-        # Sanitize name (convert spaces to underscores)
-        object.__setattr__(self, 'name', self.name.replace(' ', '_'))
-        
-        if self.position < 0:
-            raise ValueError("Position cannot be negative")
-        if self.duration <= 0:
-            raise ValueError("Duration must be positive")
-        if not self.color.startswith('#') or len(self.color) != 7:
-            raise ValueError("Color must be in #RRGGBB format")
-        if self.volume < 0:
-            raise ValueError("Volume cannot be negative")
-
-    def __hash__(self):
-        """Make clip hashable based on its attributes."""
-        return hash((self.name, self.position, self.duration, self.color, 
-                    str(self.source_path), self.volume, self.muted))
-
-    def validate(self) -> None:
-        """Validate clip attributes."""
-        if self.position < 0:
-            raise ValueError("Position cannot be negative")
-        if self.duration <= 0:
-            raise ValueError("Duration must be positive")
-        if not self.color.startswith('#') or len(self.color) != 7:
-            raise ValueError("Color must be in #RRGGBB format")
-        if self.volume < 0:
-            raise ValueError("Volume cannot be negative")
-            
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert clip to dictionary format for serialization."""
-        return {
-            'name': self.name,
-            'position': self.position,
-            'duration': self.duration,
-            'color': self.color,
-            'source_path': str(self.source_path) if self.source_path else None,
-            'volume': self.volume,
-            'muted': self.muted,
-            'arrangement_name': self.arrangement_name,
-            'metadata': self._metadata
-        }
-    
-    def from_dict(cls, data: Dict[str, Any]) -> 'Clip':
-        """Create clip instance from dictionary data."""
-        source_path = Path(data['source_path']) if data.get('source_path') else None
-        metadata = data.get('metadata', {})
-        
-        clip = cls(
-            name=data['name'],
-            position=float(data['position']),
-            duration=float(data['duration']), 
-            color=data['color'],
-            source_path=source_path,
-            volume=float(data.get('volume', 1.0)),
-            muted=bool(data.get('muted', False)),
-            arrangement_name=data.get('arrangement_name')
-        )
-        clip._metadata = metadata
-        return clip
-        
-    def get_metadata(self, key: str, default: Any = None) -> Any:
-        """Get metadata value by key."""
-        return self._metadata.get(key, default)
-        
-    def set_metadata(self, key: str, value: Any) -> None:
-        """Set metadata value for key."""
-        self._metadata[key] = value
-```
----
-
-#### src\models\project.py
-```
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Set
-
-from .arrangement import Arrangement
-
-class Project:
-    """Represents an FL Studio project with multiple arrangements."""
-    
-    def __init__(self, name: str, arrangements: Optional[List[Arrangement]] = None, 
-                 source_path: Optional[Path] = None, output_dir: Optional[Path] = None):
-        """Initialize project instance."""
-        from ..utils.logger import get_logger
-        self.logger = get_logger()
-        
-        if not name:
-            raise ValueError("Project name cannot be empty")
-            
-        self.name = name.strip()
-        self.arrangements = arrangements or []
-        self.source_path = source_path
-        self.output_dir = output_dir
-        
-        # Initial validation
-        self.validate()
-        
-    def add_arrangement(self, arrangement: Arrangement) -> None:
-        """Add an arrangement to the project."""
-        if self.get_arrangement_by_name(arrangement.name):
-            raise ValueError(f"Arrangement with name '{arrangement.name}' already exists")
-            
-        # Validate arrangement before adding
-        arrangement.validate()
-        self.arrangements.append(arrangement)
-        
-    def remove_arrangement(self, arrangement: Arrangement) -> None:
-        """Remove an arrangement from the project."""
-        if arrangement in self.arrangements:
-            self.arrangements.remove(arrangement)
-            
-    def get_arrangement_by_name(self, name: str) -> Optional[Arrangement]:
-        """Find an arrangement by its name."""
-        for arrangement in self.arrangements:
-            if arrangement.name == name:
-                return arrangement
-        return None
-        
-    def validate(self) -> None:
-        """Validate project and all its arrangements."""
-        if not self.name:
-            raise ValueError("Project name cannot be empty")
-            
-        if self.source_path and not isinstance(self.source_path, Path):
-            raise TypeError("source_path must be a Path object")
-            
-        if self.output_dir and not isinstance(self.output_dir, Path):
-            raise TypeError("output_dir must be a Path object")
-            
-        # Check for arrangement name uniqueness
-        names = [arr.name for arr in self.arrangements]
-        duplicate_names = set(name for name in names if names.count(name) > 1)
-        if duplicate_names:
-            raise ValueError(f"Duplicate arrangement names found: {', '.join(duplicate_names)}")
-            
-        # Validate each arrangement
-        for arrangement in self.arrangements:
-            try:
-                arrangement.validate()
-            except ValueError as e:
-                raise ValueError(f"Invalid arrangement '{arrangement.name}': {str(e)}")
-            
-    def get_all_clip_paths(self) -> Set[Path]:
-        """Get set of all unique audio file paths used in project."""
-        paths = set()
-        for arrangement in self.arrangements:
-            for clip in arrangement.clips:
-                if clip.source_path:
-                    paths.add(clip.source_path)
-        return paths
-        
-    def validate_audio_files(self) -> bool:
-        """Check if all referenced audio files exist."""
-        missing_files = []
-        for path in self.get_all_clip_paths():
-            if not path.exists():
-                missing_files.append(path)
-                self.logger.warning(f"Audio file not found: {path}")
-                
-        if missing_files:
-            self.logger.error(f"Missing {len(missing_files)} audio files")
-            return False
-        return True
-        
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert project to dictionary format for serialization."""
-        return {
-            'name': self.name,
-            'source_path': str(self.source_path) if self.source_path else None,
-            'output_dir': str(self.output_dir) if self.output_dir else None,
-            'arrangements': [arr.to_dict() for arr in self.arrangements]
-        }
-    
-    def from_dict(cls, data: Dict[str, Any]) -> 'Project':
-        """Create project instance from dictionary data."""
-        source_path = Path(data['source_path']) if data.get('source_path') else None
-        output_dir = Path(data['output_dir']) if data.get('output_dir') else None
-        
-        project = cls(
-            name=data['name'],
-            source_path=source_path,
-            output_dir=output_dir
-        )
-        
-        # Add arrangements
-        for arr_data in data.get('arrangements', []):
-            arrangement = Arrangement.from_dict(arr_data)
-            project.add_arrangement(arrangement)
-            
-        return project
-```
----
-
-#### src\utils\__init__.py
-```
-"""Utils package for FL Studio to Cubase migration tool.
-
-This package contains utility functionality for file management, logging,
-and other support functions.
-"""
-
-from .file_manager import FileManager
-from .logger import setup_logger, get_logger, log_error
-
-__all__ = ['FileManager', 'setup_logger', 'get_logger', 'log_error']
-```
----
-
-#### src\utils\file_manager.py
-```
-from pathlib import Path
-from typing import List, Dict, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..models.project import Project
-    from ..models.arrangement import Arrangement
-
-class FileManager:
-    """Handles file system operations and directory structure."""
-    
-    def __init__(self, base_dir: str):
-        """Initialize file manager with base directory.
-        
-        Args:
-            base_dir: Base directory for file operations
-        """
-        self.base_dir = Path(base_dir)
-        # Import logger here to avoid circular import
-        from ..utils.logger import get_logger
-        self.logger = get_logger()
-        
-    def create_directory_structure(self, project: "Project") -> Dict["Arrangement", Path]:
-        """Create output directory structure for project and arrangements.
-        
-        Args:
-            project: Project instance containing arrangements
-            
-        Returns:
-            Dictionary mapping arrangements to their output directories
-            
-        Raises:
-            OSError: If directory creation fails
-        """
-        # Create base output directory
-        project_dir = self.base_dir / self._sanitize_path(project.name)
-        project_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create arrangement directories
-        arrangement_dirs = {}
-        for arrangement in project.arrangements:
-            arr_dir = project_dir / self._sanitize_path(arrangement.name)
-            audio_dir = arr_dir / "audio_files"
-            
-            try:
-                audio_dir.mkdir(parents=True, exist_ok=True)
-                arrangement_dirs[arrangement] = arr_dir
-                arrangement.folder_path = arr_dir
-            except Exception as e:
-                self.logger.error(f"Failed to create directory for arrangement {arrangement.name}: {e}")
-                raise
-                
-        return arrangement_dirs
-        
-    def cleanup_temp_files(self, directory: Optional[Path] = None) -> None:
-        """Clean up temporary files and directories.
-        
-        Args:
-            directory: Optional specific directory to clean, defaults to temp dir
-        """
-        if not directory:
-            from ..config import Config
-            directory = Config.TEMP_DIR
-            
-        if not directory.exists():
-            return
-            
-        try:
-            shutil.rmtree(directory)
-            self.logger.debug(f"Cleaned up temporary directory: {directory}")
-        except Exception as e:
-            self.logger.warning(f"Failed to clean up temporary directory {directory}: {e}")
-            
-    def validate_paths(self) -> bool:
-        """Validate all required paths exist and are accessible.
-        
-        Returns:
-            True if all paths are valid and accessible, False otherwise
-        """
-        try:
-            # Check base directory
-            if not self.base_dir.exists():
-                self.base_dir.mkdir(parents=True)
-                
-            # Verify write permissions
-            test_file = self.base_dir / ".write_test"
-            try:
-                test_file.touch()
-                test_file.unlink()
-            except Exception as e:
-                self.logger.error(f"No write permission in base directory: {e}")
-                return False
-                
-            # Check temp directory
-            from ..config import Config
-            temp_dir = Config.TEMP_DIR
-            if not temp_dir.exists():
-                temp_dir.mkdir(parents=True)
-                
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Path validation failed: {e}")
-            return False
-            
-    def _sanitize_path(self, name: str) -> str:
-        """Sanitize a string for use in file paths.
-        
-        Args:
-            name: Original path string
-            
-        Returns:
-            Sanitized path string
-        """
-        # Replace invalid characters with underscore
-        invalid_chars = '<>:"/\\|?*'
-        for char in invalid_chars:
-            name = name.replace(char, '_')
-            
-        # Remove leading/trailing spaces and dots
-        name = name.strip('. ')
-        
-        # Ensure name is not empty
-        if not name:
-            name = "unnamed"
-            
-        return name
-        
-    def copy_audio_file(self, source: Path, dest: Path) -> bool:
-        """Copy audio file with error handling.
-        
-        Args:
-            source: Source audio file path
-            dest: Destination path
-            
-        Returns:
-            True if copy succeeded, False otherwise
-        """
-        try:
-            shutil.copy2(source, dest)
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to copy audio file from {source} to {dest}: {e}")
-            return False
-            
-    def ensure_unique_path(self, path: Path) -> Path:
-        """Ensure path is unique by adding number suffix if needed.
-        
-        Args:
-            path: Original path
-            
-        Returns:
-            Unique path with number suffix if needed
-        """
-        if not path.exists():
-            return path
-            
-        base = path.parent / path.stem
-        ext = path.suffix
-        counter = 1
-        
-        while True:
-            new_path = Path(f"{base}_{counter}{ext}")
-            if not new_path.exists():
-                return new_path
-            counter += 1
-```
----
-
-#### src\utils\logger.py
-```
-from pathlib import Path
-from typing import Optional
-
-def setup_logger(log_file: Optional[Path] = None, debug_mode: bool = False) -> logging.Logger:
-    """Configure application-wide logging with console and optional file output.
-    
-    Args:
-        log_file: Optional path to log file
-        debug_mode: Whether to enable debug logging
-        
-    Returns:
-        Configured logger instance
-    """
-    logger = logging.getLogger('fl_cubase_migration')
-    logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
-    
-    # Clear any existing handlers
-    logger.handlers.clear()
-    
-    # Create formatters
-    console_formatter = logging.Formatter(
-        '%(levelname)s: %(message)s'
-    )
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-    )
-    
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
-    # File handler if log_file is specified
-    if log_file:
-        try:
-            # Ensure directory exists
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
-            file_handler.setLevel(logging.DEBUG)
-            file_handler.setFormatter(file_formatter)
-            logger.addHandler(file_handler)
-        except Exception as e:
-            logger.error(f"Failed to set up file logging to {log_file}: {e}")
-    
-    return logger
-
-def get_logger() -> logging.Logger:
-    """Get the configured logger instance.
-    
-    Returns:
-        Logger instance
-    """
-    logger = logging.getLogger('fl_cubase_migration')
-    
-    # If logger has no handlers, set up a basic configuration
-    if not logger.handlers:
-        setup_logger()
-        
-    return logger
-
-def log_error(error: Exception, context: Optional[str] = None) -> None:
-    """Log an error with optional context information.
-    
-    Args:
-        error: Exception to log
-        context: Optional context information
-    """
-    logger = get_logger()
-    error_message = f"{error.__class__.__name__}: {str(error)}"
-    if context:
-        error_message = f"{context} - {error_message}"
-    logger.error(error_message, exc_info=True)
+fl2cu
 ```
 ---
 
@@ -2087,10 +1473,13 @@ from src.models.clip import Clip
 from src.models.arrangement import Arrangement
 from src.models.project import Project
 
-def generate_sine_wave(frequency: float = 440, duration: float = 1.0, sample_rate: int = 44100) -> np.ndarray:
-    """Generate a sine wave array."""
-    t = np.linspace(0, duration, int(sample_rate * duration))
-    return np.sin(2 * np.pi * frequency * t)
+def generate_sine_wave():
+    """Generate sine wave for testing."""
+    def _generate(frequency=440.0, duration=1.0, sample_rate=44100):
+        t = np.linspace(0, duration, int(sample_rate * duration))
+        samples = np.sin(2 * np.pi * frequency * t)
+        return (samples * 32767).astype(np.int16)
+    return _generate
 
 def save_wav(filename: Path, audio_data: np.ndarray, channels: int = 1, sample_rate: int = 44100) -> None:
     """Save audio data as WAV file."""
@@ -2111,19 +1500,25 @@ def temp_dir(tmp_path_factory) -> Path:
     test_dir = tmp_path_factory.mktemp("test_output")
     return test_dir
 
-def sample_wav_file(temp_dir: Path) -> Path:
-    """Create a simple test WAV file."""
-    wav_path = temp_dir / "test.wav"
-    audio_data = generate_sine_wave(440, 1.0)
-    save_wav(wav_path, audio_data)
+def sample_wav_file(tmp_path, generate_sine_wave):
+    """Create test WAV file with known content."""
+    wav_path = tmp_path / "test.wav"
+    samples = generate_sine_wave()
+    
+    with wave.open(str(wav_path), 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(44100)
+        wav_file.writeframes(samples.tobytes())
+    
     return wav_path
 
-def sample_clip(sample_wav_file: Path) -> Clip:
-    """Create a sample clip instance."""
+def sample_clip(sample_wav_file):
+    """Create test clip with known audio."""
     return Clip(
         name="test_clip",
         position=0.0,
-        duration=2.0,  # Fixed duration to match test expectations
+        duration=1.0,
         color="#FF0000",
         source_path=sample_wav_file,
         volume=1.0,
@@ -2155,6 +1550,29 @@ def cleanup_temp_files(temp_dir: Path):
     yield
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
+
+def flp_file_content():
+    """Generate minimal valid FLP file content."""
+    header = (
+        b"FLhd"  # Magic
+        b"\x06\x00\x00\x00"  # Header size
+        b"\x00\x00"  # Format version
+        b"\x01\x00"  # Number of channels
+        b"\x60\x00"  # PPQ (96)
+    )
+    
+    data = (
+        b"FLdt"  # Data chunk magic
+        b"\x00\x00\x00\x00"  # Empty data chunk
+    )
+    
+    return header + data
+
+def sample_project_path(tmp_path, flp_file_content):
+    """Create sample FLP file for testing."""
+    project_file = tmp_path / "test_project.flp"
+    project_file.write_bytes(flp_file_content)
+    return project_file
 ```
 ---
 
@@ -2737,30 +2155,30 @@ class TestAudioProcessor:
 
     def test_volume_adjustment(self, temp_dir, sample_wav_file):
         """Test volume adjustment during export."""
-        # Create clip with modified volume
         clip = Clip(
             name="volume_test",
             position=0.0,
-            duration=2.0,
+            duration=1.0,
             color="#FF0000",
             source_path=sample_wav_file,
-            volume=0.5  # 50% volume
+            volume=0.5
         )
-        
+
         processor = AudioProcessor(str(temp_dir))
         result = processor.export_audio_clips([clip])
         exported_path = result[clip]
-        
-        # Read and compare audio data
+
+        # Read and compare audio data as float32 for accurate comparison
         with wave.open(str(sample_wav_file), 'rb') as original:
             orig_frames = np.frombuffer(original.readframes(original.getnframes()), dtype=np.int16)
-            
+            orig_float = orig_frames.astype(np.float32) / 32767.0
+
         with wave.open(str(exported_path), 'rb') as exported:
             exported_frames = np.frombuffer(exported.readframes(exported.getnframes()), dtype=np.int16)
-            
-        # Check if exported audio is approximately half the amplitude
-        # Allow for small differences due to floating point arithmetic
-        assert np.allclose(exported_frames, orig_frames * 0.5, rtol=1e-3)
+            exported_float = exported_frames.astype(np.float32) / 32767.0
+
+        # Compare using relative tolerance
+        assert np.allclose(exported_float, orig_float * 0.5, rtol=1e-3)
 
     def test_parallel_processing(self, temp_dir, sample_wav_file):
         """Test processing multiple clips in parallel."""
@@ -2878,6 +2296,7 @@ def test_path_validation(tmp_path):
 ```
 from pathlib import Path
 
+
 from src.models.project import Project
 from src.models.arrangement import Arrangement
 from src.models.clip import Clip
@@ -2913,14 +2332,33 @@ class TestClip:
 
     def test_clip_serialization(self, sample_clip):
         """Test clip serialization to and from dict."""
+        # Add some metadata to test
+        sample_clip = sample_clip.with_metadata('test_key', 'test_value')
+        
         data = sample_clip.to_dict()
         restored_clip = Clip.from_dict(data)
         
-        assert restored_clip.name == sample_clip.name
-        assert restored_clip.position == sample_clip.position
-        assert restored_clip.duration == sample_clip.duration
-        assert restored_clip.color == sample_clip.color
-        assert str(restored_clip.source_path) == str(sample_clip.source_path)
+        assert restored_clip == sample_clip
+        assert restored_clip.get_metadata('test_key') == 'test_value'
+
+    def test_clip_metadata(self, sample_clip):
+        """Test metadata operations."""
+        # Add metadata
+        clip_with_meta = sample_clip.with_metadata('key1', 'value1')
+        clip_with_more = clip_with_meta.with_metadata('key2', 'value2')
+        
+        assert clip_with_more.get_metadata('key1') == 'value1'
+        assert clip_with_more.get_metadata('key2') == 'value2'
+        assert clip_with_more.get_metadata('nonexistent') is None
+        assert clip_with_more.get_metadata('nonexistent', 'default') == 'default'
+
+    def test_clip_immutability(self, sample_clip):
+        """Test that clip is immutable."""
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            sample_clip.name = "new_name"
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            sample_clip.position = 2.0
 
 class TestArrangement:
     def test_arrangement_initialization(self):
@@ -2937,25 +2375,67 @@ class TestArrangement:
         arr.add_clip(sample_clip)
         assert len(arr.clips) == 1
         assert arr.clips[0] == sample_clip
-        assert sample_clip.arrangement_name == "TEST_ARR"
+        assert arr.clips[0].arrangement_name == "TEST_ARR"
+        
+        # Basic equality should ignore arrangement name
+        assert arr.clips[0] == sample_clip
+        
+        # Full equality should consider arrangement name
+        assert not arr.clips[0].full_equals(sample_clip)
         
         # Remove clip
         arr.remove_clip(sample_clip)
         assert len(arr.clips) == 0
-        assert sample_clip.arrangement_name is None
+
+    def test_get_clip_by_name(self, sample_clip):
+        """Test finding clips by name."""
+        arr = Arrangement(name="TEST_ARR")
+        arr.add_clip(sample_clip)
+        
+        found_clip = arr.get_clip_by_name(sample_clip.name)
+        assert found_clip is not None
+        assert found_clip == sample_clip
+        
+        assert arr.get_clip_by_name("nonexistent") is None
 
     def test_get_duration(self, sample_clip):
         """Test arrangement duration calculation."""
         arr = Arrangement(name="TEST_ARR")
         assert arr.get_duration() == 0.0
         
-        arr.add_clip(sample_clip)  # At position 0.0, duration 2.0
-        assert arr.get_duration() == 2.0
+        arr.add_clip(sample_clip)  # At position 0.0
+        assert arr.get_duration() == sample_clip.duration
         
         # Add another clip that extends beyond
-        clip2 = Clip(name="clip2", position=1.5, duration=2.0, color="#00FF00")
+        clip2 = Clip(
+            name="clip2", 
+            position=1.5, 
+            duration=2.0, 
+            color="#00FF00"
+        )
         arr.add_clip(clip2)
         assert arr.get_duration() == 3.5  # 1.5 + 2.0
+
+    def test_arrangement_validation(self, sample_clip):
+        """Test arrangement validation."""
+        arr = Arrangement(name="TEST_ARR")
+        
+        # Empty name
+        with pytest.raises(ValueError, match="cannot be empty"):
+            Arrangement(name="")
+        
+        # Duplicate clip names
+        arr.add_clip(sample_clip)
+        duplicate = Clip(
+            name=sample_clip.name,
+            position=1.0,
+            duration=1.0,
+            color="#00FF00"
+        )
+        
+        with pytest.raises(ValueError, match="Duplicate clip names"):
+            arr.add_clip(duplicate)
+            arr.validate()
 
 class TestProject:
     def test_project_initialization(self, temp_dir):
@@ -2985,6 +2465,17 @@ class TestProject:
         project.remove_arrangement(sample_arrangement)
         assert len(project.arrangements) == 0
 
+    def test_get_arrangement_by_name(self, sample_arrangement):
+        """Test finding arrangements by name."""
+        project = Project(name="test_project")
+        project.add_arrangement(sample_arrangement)
+        
+        found = project.get_arrangement_by_name(sample_arrangement.name)
+        assert found is not None
+        assert found == sample_arrangement
+        
+        assert project.get_arrangement_by_name("nonexistent") is None
+
     def test_validate_audio_files(self, sample_project, sample_wav_file):
         """Test audio file validation."""
         assert sample_project.validate_audio_files() == True
@@ -2993,20 +2484,34 @@ class TestProject:
         sample_wav_file.unlink()
         assert sample_project.validate_audio_files() == False
 
-    def test_project_serialization(self, sample_project):
-        """Test project serialization to and from dict."""
-        data = sample_project.to_dict()
-        restored_project = Project.from_dict(data)
+    def test_project_validation(self, sample_arrangement):
+        """Test project validation."""
+        project = Project(name="test_project")
         
-        assert restored_project.name == sample_project.name
-        assert len(restored_project.arrangements) == len(sample_project.arrangements)
-        assert restored_project.arrangements[0].name == sample_project.arrangements[0].name
+        # Empty name
+        with pytest.raises(ValueError, match="cannot be empty"):
+            Project(name="")
+        
+        # Duplicate arrangement names
+        project.add_arrangement(sample_arrangement)
+        duplicate = Arrangement(name=sample_arrangement.name)
+        
+        with pytest.raises(ValueError, match="Duplicate arrangement names"):
+            project.add_arrangement(duplicate)
+            project.validate()
+
+    def test_get_all_clip_paths(self, sample_project, sample_wav_file):
+        """Test collecting all unique audio file paths."""
+        paths = sample_project.get_all_clip_paths()
+        assert len(paths) > 0
+        assert sample_wav_file in paths
 ```
 ---
 
 #### tests\test_project_parser.py
 ```
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from src.core.project_parser import FLProjectParser
 from src.models.project import Project

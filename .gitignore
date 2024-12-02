@@ -30,6 +30,7 @@ ENV/
 .venv
 env.bak/
 venv.bak/
+venv_new/
 
 # IDE
 .idea/
