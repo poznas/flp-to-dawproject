@@ -1,154 +1,108 @@
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+import subprocess
+import json
+import shutil
+import soundfile as sf
+import numpy as np
+import aaf2
+from typing import Dict, Tuple, Optional, Any
+from aaf2.file import AAFFile
 
 import aaf2
 from aaf2 import mobs, components, essence
 
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
+from .audio_processor import AudioProcessor
 
 logger = logging.getLogger(__name__)
 
 class AAFGenerator:
-    """Generates AAF files from arrangements."""
+    """Generates AAF files from arrangements using direct WAV linking."""
     
-    def __init__(self, arrangement: Arrangement, clip_paths: Dict[Clip, Path]):
-        """Initialize the AAF generator.
-        
-        Args:
-            arrangement: The arrangement to convert
-            clip_paths: Mapping of clips to their audio file paths
-        """
+    def __init__(self, arrangement, clip_paths: Dict[Clip, Path]):
         self.arrangement = arrangement
         self.clip_paths = clip_paths
-        self.edit_rate = 48000  # Standard audio sample rate for professional audio
+        self.logger = logging.getLogger(__name__)
+
+    def _probe_audio(self, path: str) -> Dict[str, Any]:
+        """Get audio file metadata using ffprobe."""
+        cmd = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-of', 'json',
+            '-show_format',
+            '-show_streams',
+            str(path)
+        ]
         
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"ffprobe failed for {path}: {e.stderr}")
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse ffprobe output: {e}")
+            raise
+
     def generate_aaf(self, output_path: str) -> None:
-        """Generate an AAF file for the arrangement.
+        """Generate AAF file with the arrangement."""
+        self.logger.info(f"Creating AAF file at {output_path}")
         
-        Args:
-            output_path: Path where the AAF file will be saved
-        """
-        with aaf2.open(output_path, 'w') as f:
-            # Create main composition
-            comp_mob = f.create.CompositionMob()
-            comp_mob.name = self.arrangement.name
-            f.content.mobs.append(comp_mob)
-            
-            # Create timeline
-            timeline = f.create.Sequence(media_kind='sound')
-            comp_mob.usage = ['Usage_TopLevel']
-            
-            try:
+        try:
+            with aaf2.open(output_path, 'w') as f:
+                # Create the composition mob for the arrangement
+                comp_mob = f.create.CompositionMob(self.arrangement.name)
+                f.content.mobs.append(comp_mob)
+                
+                # Create a timeline mobslot for audio
+                edit_rate = 48000  # Standard audio sample rate
+                slot = comp_mob.create_timeline_slot(edit_rate)
+                sequence = f.create.Sequence('sound')
+                slot.segment = sequence
+
+                # Process each clip
                 for clip in self.arrangement.clips:
                     source_path = self.clip_paths.get(clip)
                     if not source_path or not source_path.exists():
-                        logger.warning(f"Skipping clip {clip.name} - source file not found")
+                        self.logger.warning(f"Audio file not found for clip: {clip.name}")
                         continue
-                        
+
                     try:
-                        # Create source mob for the audio file
-                        source_mob = f.create.SourceMob()
-                        f.content.mobs.append(source_mob)
+                        # Get audio metadata using ffprobe
+                        metadata = self._probe_audio(str(source_path))
+                        print(metadata)
                         
-                        # Create essence descriptor
-                        descriptor = f.create.PCMDescriptor()
-                        descriptor.sample_rate = self.edit_rate
-                        descriptor.channels = 2  # Stereo
-                        descriptor.quantization_bits = 16
-                        source_mob.descriptor = descriptor
+                        # Link the WAV file - this creates master mob, source mob, and tape mob
+                        master_mob, source_mob, tape_mob = f.content.link_external_wav(metadata)
                         
-                        # Create source clip
-                        source_clip = f.create.SourceClip()
-                        source_clip.mob = source_mob
-                        source_clip.length = int(clip.duration * self.edit_rate)
+                        # Create source clip referencing the master mob
+                        clip_mob = f.create.SourceClip()
+                        clip_mob.mob = master_mob
+                        clip_mob.slot = 1  # Master mobs typically use slot 1
+                        clip_mob.start = int(clip.position * edit_rate)
+                        clip_mob.length = int(clip.duration * edit_rate)
                         
-                        # Create timeline slot
-                        slot = source_mob.create_timeline_slot(
-                            edit_rate=self.edit_rate,
-                            length=source_clip.length
-                        )
-                        slot.segment = source_clip
+                        # Add the clip to the sequence
+                        sequence.components.append(clip_mob)
                         
-                        # Create reference to the source in the composition
-                        comp_clip = f.create.SourceClip()
-                        comp_clip.mob = source_mob
-                        comp_clip.slot = slot
-                        comp_clip.length = source_clip.length
-                        comp_clip.start = int(clip.position * self.edit_rate)
-                        
-                        # Set clip metadata
-                        comp_clip.user_comments = {
-                            'Name': clip.name,
-                            'Color': clip.color,
-                            'Muted': str(clip.muted).lower(),
-                            'Volume': str(clip.volume)
-                        }
-                        
-                        # Add to timeline
-                        timeline.components.append(comp_clip)
-                        
+                        self.logger.debug(f"Added clip {clip.name} at position {clip.position}")
+
                     except Exception as e:
-                        logger.error(f"Error adding clip {clip.name}: {str(e)}")
-                        continue
-                        
-                # Set the timeline as the composition's first slot
-                comp_slot = comp_mob.create_timeline_slot(
-                    edit_rate=self.edit_rate,
-                    length=sum(c.length for c in timeline.components)
-                )
-                comp_slot.segment = timeline
-                
-            except Exception as e:
-                logger.error(f"Failed to generate AAF: {str(e)}")
-                raise
-                
-    def _add_clip_to_composition(self, f: "aaf2.File", composition: "aaf2.MasterMob", 
-                               clip: "Clip", edit_rate: int) -> None:
-        """Add a clip to the AAF composition."""
-        try:
-            # Get the exported audio file path using clip hash
-            audio_path = self.audio_file_map.get(hash(clip))
-            if not audio_path or not audio_path.exists():
-                self.logger.warning(f"Audio file not found for clip {clip.name}, skipping")
-                return
-                
-            # Create source mob for the audio file
-            source_mob = f.create.SourceMob()
-            f.content.mobs.append(source_mob)
-            
-            # Import the audio essence
-            source_mob.import_audio_essence(
-                str(audio_path),
-                edit_rate
-            )
-            
-            # Calculate position and length in edit rate units
-            position_frames = int(clip.position * edit_rate)
-            length_frames = int(clip.duration * edit_rate)
-            
-            # Create the clip reference
-            clip_slot = source_mob.create_source_clip(1, position_frames)
-            clip_slot.length = length_frames
-            
-            # Set clip metadata if supported by AAF version
-            try:
-                if hasattr(clip_slot, 'user_comments'):
-                    clip_slot.user_comments['Name'] = clip.name
-                    clip_slot.user_comments['Color'] = clip.color
-                    if clip.muted:
-                        clip_slot.user_comments['Muted'] = 'true'
-            except Exception as e:
-                self.logger.warning(f"Failed to set clip metadata: {e}")
-                
-            # Apply volume if different from default
-            if clip.volume != 1.0:
-                try:
-                    clip_slot.volume = clip.volume
-                except Exception as e:
-                    self.logger.warning(f"Failed to set clip volume: {e}")
-                    
+                        self.logger.error(f"Failed to process clip {clip.name}: {str(e)}")
+                        raise e
+
+                # Save the file
+                f.save()
+                self.logger.info("AAF file successfully generated")
+
         except Exception as e:
-            self.logger.error(f"Failed to add clip {clip.name} to AAF: {e}")
-            raise
+            self.logger.error(f"Failed to generate AAF file: {str(e)}")
+            raise e

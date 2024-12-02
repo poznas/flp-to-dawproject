@@ -2,6 +2,7 @@
 pyflp>=2.0.0      # FL Studio project file parsing
 construct>=2.10.0  # Binary data parsing
 wave>=0.0.2       # WAV file reading/writing
+soundfile>=0.10.3  # Audio file reading/writing
 numpy>=1.21.0     # Audio data manipulation
 lxml>=4.9.0       # XML processing
 xmlschema>=2.5.0  # XML schema validation
