@@ -4,7 +4,7 @@ from typing import Dict, Union
 
 from .core.project_parser import FLProjectParser
 from .core.audio_processor import AudioProcessor
-from .core.aaf_generator import AAFGenerator
+from .core.dawproject_generator import DAWProjectGenerator
 from .utils.file_manager import FileManager
 from .utils.logger import setup_logger
 from .models.project import Project
@@ -29,11 +29,11 @@ def save(project: Project, output_dir: Union[str, Path]) -> Dict[str, Path]:
         [clip for arr in project.arrangements for clip in arr.clips]
     )
     
-    # Generate AAF files
+    # Generate DAWproject files
     output_files = {}
     for arrangement in project.arrangements:
         arr_dir = arrangement_dirs[arrangement]
-        aaf_path = arr_dir / f"{arrangement.name}.aaf"
+        dawproject_path = arr_dir / f"{arrangement.name}.dawproject"
         
         # Get clip paths for this arrangement
         arrangement_clips = {
@@ -41,11 +41,11 @@ def save(project: Project, output_dir: Union[str, Path]) -> Dict[str, Path]:
             if clip in arrangement.clips
         }
         
-        # Generate AAF
-        generator = AAFGenerator(arrangement, arrangement_clips)
-        generator.generate_aaf(str(aaf_path))
+        # Generate DAWproject
+        generator = DAWProjectGenerator(arrangement, arrangement_clips)
+        generator.generate_dawproject(str(dawproject_path))
         
-        output_files[arrangement.name] = aaf_path
+        output_files[arrangement.name] = dawproject_path
         
     return output_files
 

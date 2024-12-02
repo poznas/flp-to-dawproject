@@ -1062,20 +1062,6 @@ def process_project(
     # Log project details
     logger.debug(f"Project name: {project.name}")
     logger.debug(f"Number of arrangements: {len(project.arrangements)}")
-    for arr in project.arrangements:
-        logger.debug(f"Arrangement '{arr.name}' contains {len(arr.clips)} clips")
-        if debug:
-            for clip in arr.clips:
-                logger.debug(f"  Clip: {clip.name}")
-                logger.debug(f"    Position: {clip.position}")
-                logger.debug(f"    Duration: {clip.duration}")
-                logger.debug(f"    Color: {clip.color}")
-                logger.debug(f"    Source path: {clip.source_path}")
-                if hasattr(clip, 'volume'):
-                    logger.debug(f"    Volume: {clip.volume}")
-                if hasattr(clip, 'muted'):
-                    logger.debug(f"    Muted: {clip.muted}")
-    
     # Create file manager and directories
     logger.debug(f"Creating directory structure in {output_dir}")
     file_manager = FileManager(str(output_dir))
@@ -1460,51 +1446,38 @@ __all__ = ['FLProjectParser', 'AudioProcessor', 'AAFGenerator']
 #### src\fl2cu\core\aaf_generator.py
 ```
 from pathlib import Path
-from typing import Dict, Tuple, Optional
-from aaf2.file import AAFFile
-
-from aaf2 import mobs, components, essence
+from typing import Dict, Optional, Any
 
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
 
-logger = logging.getLogger(__name__)
-
 class AAFGenerator:
-    """Generates AAF files from arrangements."""
+    """Generates AAF files from arrangements using direct WAV linking."""
     
-    def __init__(self, arrangement, clip_paths: Dict[Clip, Path]):
+    def __init__(self, arrangement: Arrangement, clip_paths: Dict[Clip, Path]):
         self.arrangement = arrangement
         self.clip_paths = clip_paths
         self.logger = logging.getLogger(__name__)
 
-    def _create_wave_descriptor(self, f: AAFFile, file_path: str) -> Tuple['aaf2.essence.WAVEDescriptor', int]:
-        """Create WAVEDescriptor for audio file."""
+    def _probe_audio(self, path: str) -> Dict[str, Any]:
+        """Get audio file metadata using ffprobe."""
+        cmd = [
+            'ffprobe',
+            '-v', 'quiet',
+            '-of', 'json',
+            '-show_format',
+            '-show_streams',
+            str(path)
+        ]
+        
         try:
-            with wave.open(file_path, 'rb') as wav_file:
-                channels = wav_file.getnchannels()
-                sample_rate = wav_file.getframerate()
-                bit_depth = wav_file.getsampwidth() * 8
-                total_frames = wav_file.getnframes()
-
-            # Create WAVEDescriptor using the factory
-            descriptor = f.create.WAVEDescriptor()
-            
-            # Set properties using the AAF SDK method
-            descriptor.sample_rate = sample_rate
-            descriptor.channels = channels
-            descriptor.quantization_bits = bit_depth
-            descriptor.length = total_frames
-            
-            # Create and set the locator
-            locator = f.create.NetworkLocator()
-            locator.absolute_path = str(Path(file_path).resolve())
-            descriptor.append_locator(locator)
-
-            return descriptor, total_frames
-
-        except Exception as e:
-            self.logger.error(f"Failed to create WAVEDescriptor for {file_path}: {str(e)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"ffprobe failed for {path}: {e.stderr}")
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse ffprobe output: {e}")
             raise
 
     def generate_aaf(self, output_path: str) -> None:
@@ -1513,15 +1486,15 @@ class AAFGenerator:
         
         try:
             with aaf2.open(output_path, 'w') as f:
-                # Create the composition mob
+                # Create the composition mob for the arrangement
                 comp_mob = f.create.CompositionMob(self.arrangement.name)
                 f.content.mobs.append(comp_mob)
                 
                 # Create a timeline mobslot for audio
                 edit_rate = 48000  # Standard audio sample rate
-                slot = comp_mob.create_timeline_slot(edit_rate)
-                sequence = f.create.Sequence('sound')
-                slot.segment = sequence
+                sequence = f.create.Sequence(media_kind="sound")
+                timeline_slot = comp_mob.create_timeline_slot(edit_rate)
+                timeline_slot.segment = sequence
 
                 # Process each clip
                 for clip in self.arrangement.clips:
@@ -1531,34 +1504,26 @@ class AAFGenerator:
                         continue
 
                     try:
-                        # Create source mob for the clip
-                        source_mob = f.create.SourceMob()
+                        # Get audio metadata using ffprobe
+                        metadata = self._probe_audio(str(source_path))
                         
-                        # Create and attach WAVEDescriptor
-                        descriptor, length = self._create_wave_descriptor(f, str(source_path))
-                        source_mob.descriptor = descriptor
-                        
-                        # Add the source mob to the file
+                        # Create master mob and source mob
+                        master_mob, source_mob, tape_mob = f.content.link_external_wav(metadata)
+                        f.content.mobs.append(master_mob)
                         f.content.mobs.append(source_mob)
-                        
-                        # Create a timeline mobslot in the source mob
-                        source_slot = source_mob.create_timeline_slot(edit_rate)
-                        
-                        # Create the source clip
-                        source_ref = f.create.SourceClip()
-                        source_ref.mob = source_mob
-                        source_ref.slot = source_slot.slot_id
-                        source_ref.length = length
-                        
-                        # Create the clip for the composition
-                        comp_clip = f.create.SourceClip()
-                        comp_clip.mob = source_mob
-                        comp_clip.slot = source_slot.slot_id
-                        comp_clip.start = int(clip.position * edit_rate)
-                        comp_clip.length = int(clip.duration * edit_rate)
+                        f.content.mobs.append(tape_mob)
 
+                        # Create source clip referencing the master mob
+                        source_clip = master_mob.create_source_clip(
+                            slot_id=1,  # Use slot_id parameter instead of slot property
+                            start=int(clip.position * edit_rate),
+                            length=int(clip.duration * edit_rate)
+                        )
+                        
                         # Add the clip to the sequence
-                        sequence.components.append(comp_clip)
+                        sequence.components.append(source_clip)
+                        
+                        self.logger.debug(f"Added clip {clip.name} at position {clip.position}")
 
                     except Exception as e:
                         self.logger.error(f"Failed to process clip {clip.name}: {str(e)}")
@@ -1570,7 +1535,7 @@ class AAFGenerator:
 
         except Exception as e:
             self.logger.error(f"Failed to generate AAF file: {str(e)}")
-            raise
+            raise e
 ```
 ---
 
@@ -1588,34 +1553,27 @@ class AudioProcessor:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
+        self.temp_dir = Path(tempfile.mkdtemp())
 
-    def _convert_to_pcm_wav(self, input_path: Path, output_path: Path) -> bool:
-        """Convert audio file to standard PCM WAV format."""
-        try:
-            # Read audio file using soundfile (supports many formats)
-            data, sample_rate = sf.read(str(input_path))
-            
-            # Convert to float32 for processing
-            data = data.astype(np.float32)
-
-            # If mono, reshape to 2D array
-            if len(data.shape) == 1:
-                data = data.reshape(-1, 1)
-
-            # Write as standard PCM WAV
-            with wave.open(str(output_path), 'wb') as wav_file:
-                wav_file.setnchannels(data.shape[1] if len(data.shape) > 1 else 1)
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(sample_rate)
-                # Convert to 16-bit PCM
-                pcm_data = (data * 32767).astype(np.int16)
-                wav_file.writeframes(pcm_data.tobytes())
-            
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to convert {input_path}: {str(e)}")
-            return False
+    def _convert_to_standard_wav(self, input_path: Path) -> Optional[Path]:
+        """Convert audio file to standard PCM WAV format using soundfile."""
+        # Create temp output path
+        output_path = self.temp_dir / f"{input_path.stem}_converted.wav"
+        
+        # Read using soundfile (supports many formats)
+        data, sample_rate = sf.read(str(input_path))
+        
+        # Convert to float32 for processing
+        data = data.astype(np.float32)
+        
+        # If mono, reshape to 2D array
+        if len(data.shape) == 1:
+            data = data.reshape(-1, 1)
+        
+        # Write as standard PCM WAV
+        sf.write(str(output_path), data, sample_rate, subtype='PCM_16')
+        
+        return output_path
 
     def process_audio_clips(self, clips: list) -> dict:
         """Process and validate audio clips, converting formats if needed."""
@@ -1626,19 +1584,14 @@ class AudioProcessor:
                 self.logger.warning(f"Source file not found: {clip.source_path}")
                 continue
 
-            try:
-                # Create output filename
-                output_path = self.output_dir / f"{clip.name}.wav"
-                
-                # Convert to standard PCM WAV
-                if self._convert_to_pcm_wav(clip.source_path, output_path):
-                    processed_clips[clip] = output_path
-                else:
-                    self.logger.error(f"Failed to process {clip.name}")
-
-            except Exception as e:
-                self.logger.error(f"Error processing {clip.name}: {str(e)}")
-                continue
+             # Create output filename
+            output_path = self.output_dir / f"{clip.name}.wav"
+            
+            # Convert to standard PCM WAV
+            if self._convert_to_pcm_wav(clip.source_path, output_path):
+                processed_clips[clip] = output_path
+            else:
+                self.logger.error(f"Failed to process {clip.name}")
 
         return processed_clips
 
@@ -1647,13 +1600,10 @@ class AudioProcessor:
         valid_clips = {}
         
         for clip, path in self.process_audio_clips(clips).items():
-            try:
-                with wave.open(str(path), 'rb') as wav_file:
-                    # Verify it's standard PCM format
-                    if wav_file.getcomptype() == 'NONE':
-                        valid_clips[clip] = path
-            except Exception as e:
-                self.logger.error(f"Invalid audio file {path}: {str(e)}")
+            with wave.open(str(path), 'rb') as wav_file:
+                # Verify it's standard PCM format
+                if wav_file.getcomptype() == 'NONE':
+                    valid_clips[clip] = path
                 
         return valid_clips
 ```

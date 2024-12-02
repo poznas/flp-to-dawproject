@@ -3,6 +3,6 @@
 
 from .project_parser import FLProjectParser
 from .audio_processor import AudioProcessor
-from .aaf_generator import AAFGenerator
+from .dawproject_generator import DAWProjectGenerator
 
-__all__ = ['FLProjectParser', 'AudioProcessor', 'AAFGenerator']
+__all__ = ['FLProjectParser', 'AudioProcessor', 'DAWProjectGenerator']

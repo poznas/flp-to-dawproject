@@ -1,21 +1,19 @@
-"""FL Studio to Cubase migration tool - Main module."""
-
+# src/fl2cu/__main__.py
 import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict
 
 from .core.project_parser import FLProjectParser
-from .core.aaf_generator import AAFGenerator
+from .core.dawproject_generator import DAWProjectGenerator
 from .utils.file_manager import FileManager
 from .utils.logger import setup_logger, get_logger
-from .aaf_inspector import AAFInspector
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Convert FL Studio projects to Cubase-compatible AAF format"
+        description="Convert FL Studio projects to DAWproject format"
     )
     
     parser.add_argument(
@@ -31,12 +29,6 @@ def parse_args() -> argparse.Namespace:
     )
     
     parser.add_argument(
-        "--inspect",
-        action="store_true",
-        help="Inspect generated AAF files after creation"
-    )
-    
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging"
@@ -49,7 +41,7 @@ def process_project(
     output_dir: Path,
     debug: bool = False
 ) -> Dict[str, Path]:
-    """Process FL Studio project and generate AAF files."""
+    """Process FL Studio project and generate DAWproject files."""
     logger = get_logger()
     
     # Parse FL Studio project
@@ -67,13 +59,8 @@ def process_project(
                 logger.debug(f"  Clip: {clip.name}")
                 logger.debug(f"    Position: {clip.position}")
                 logger.debug(f"    Duration: {clip.duration}")
-                logger.debug(f"    Color: {clip.color}")
                 logger.debug(f"    Source path: {clip.source_path}")
-                if hasattr(clip, 'volume'):
-                    logger.debug(f"    Volume: {clip.volume}")
-                if hasattr(clip, 'muted'):
-                    logger.debug(f"    Muted: {clip.muted}")
-    
+
     # Create file manager and directories
     logger.debug(f"Creating directory structure in {output_dir}")
     file_manager = FileManager(str(output_dir))
@@ -106,23 +93,17 @@ def process_project(
     
     if not clip_paths:
         logger.error("No valid audio clips were found in the project")
-        logger.error("Clip details for debugging:")
-        for clip in all_clips:
-            logger.error(f"  Clip: {clip.name}")
-            logger.error(f"    Source path: {clip.source_path}")
-            if clip.source_path:
-                logger.error(f"    Path exists: {clip.source_path.exists()}")
         raise ValueError("No valid audio clips were found in the project")
     
-    # Generate AAF files
-    logger.info("Generating AAF files...")
-    aaf_paths = {}
+    # Generate DAWproject files
+    logger.info("Generating DAWproject files...")
+    dawproject_paths = {}
     
     for arrangement in project.arrangements:
         try:
             logger.debug(f"Processing arrangement: {arrangement.name}")
             arr_dir = arrangement_dirs[arrangement]
-            aaf_path = arr_dir / f"{arrangement.name}.aaf"
+            dawproject_path = arr_dir / f"{arrangement.name}.dawproject"
             
             # Get clips for this arrangement
             arrangement_clips = {
@@ -132,44 +113,22 @@ def process_project(
             
             logger.debug(f"Found {len(arrangement_clips)} clips for arrangement {arrangement.name}")
             
-            # Generate AAF
-            logger.debug(f"Generating AAF file: {aaf_path}")
-            generator = AAFGenerator(arrangement, arrangement_clips)
-            generator.generate_aaf(str(aaf_path))
+            # Generate DAWproject
+            logger.debug(f"Generating DAWproject file: {dawproject_path}")
+            generator = DAWProjectGenerator(arrangement, arrangement_clips)
+            generator.generate_dawproject(str(dawproject_path))
             
-            aaf_paths[arrangement.name] = aaf_path
-            logger.info(f"Generated AAF for arrangement: {arrangement.name}")
+            dawproject_paths[arrangement.name] = dawproject_path
+            logger.info(f"Generated DAWproject for arrangement: {arrangement.name}")
             
         except Exception as e:
-            logger.error(f"Failed to generate AAF for arrangement {arrangement.name}")
+            logger.error(f"Failed to generate DAWproject for arrangement {arrangement.name}")
             logger.error(f"Error details: {str(e)}")
             if debug:
                 logger.exception("Full traceback:")
             continue
     
-    return aaf_paths
-
-def inspect_aaf_files(aaf_paths: Dict[str, Path], output_dir: Path) -> None:
-    """Inspect generated AAF files and save analysis."""
-    logger = get_logger()
-    logger.info("Inspecting generated AAF files...")
-    
-    inspection_dir = output_dir / "aaf_inspection"
-    inspection_dir.mkdir(exist_ok=True)
-    logger.debug(f"Created inspection directory: {inspection_dir}")
-    
-    for arr_name, aaf_path in aaf_paths.items():
-        try:
-            logger.debug(f"Inspecting AAF file for arrangement: {arr_name}")
-            inspector = AAFInspector(str(aaf_path))
-            analysis_path = inspection_dir / f"{arr_name}_analysis.json"
-            inspector.save_analysis(str(analysis_path))
-            
-            logger.info(f"Saved AAF analysis for {arr_name} to {analysis_path}")
-            
-        except Exception as e:
-            logger.error(f"Failed to inspect AAF for {arr_name}")
-            logger.error(f"Error details: {str(e)}")
+    return dawproject_paths
 
 def main() -> int:
     """Main entry point."""
@@ -205,23 +164,19 @@ def main() -> int:
         logger.debug(f"Created/verified output directory: {output_dir}")
         
         # Process project
-        aaf_paths = process_project(
+        dawproject_paths = process_project(
             input_file=input_file,
             output_dir=output_dir,
             debug=args.debug
         )
         
-        if not aaf_paths:
-            logger.error("No AAF files were generated")
+        if not dawproject_paths:
+            logger.error("No DAWproject files were generated")
             return 1
         
-        # Inspect AAF files if requested
-        if args.inspect:
-            inspect_aaf_files(aaf_paths, output_dir)
-        
         logger.info("Processing complete!")
-        logger.info("\nGenerated AAF files:")
-        for name, path in aaf_paths.items():
+        logger.info("\nGenerated DAWproject files:")
+        for name, path in dawproject_paths.items():
             logger.info(f"- {name}: {path}")
             
         return 0
