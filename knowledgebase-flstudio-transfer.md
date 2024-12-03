@@ -480,11 +480,200 @@ sphinx-rtd-theme>=2.0.0  # Documentation theme
 ```
 ---
 
+#### knowledgebase\dawproject\dawproject-README.md
+# DAWproject
+
+Open exchange format for user data between Digital Audio Workstations (DAWs)
+
+## Motivation
+
+The DAWproject format provides a (vendor-agnostic) way of transferring user data between different music applications (DAWs).
+
+Currently, there is no file-format which is purpose-built for this task.
+Standard MIDI files can represent note data, but it is often a lower-level representation (no ramps) of data than what the DAW uses internally, which forces consolidation on export. AAF only covers audio and doesn't have any concept of musical-time, which limits it to post-audio workflows . Most plug-ins do allow you to save presets to a shared location, but this has to be done for each instance. What most users end up doing is just exporting audio as stems.
+
+The aim of this project is to export all translatable project data (audio/note/automation/plug-in) along with the structure surrounding it into a single DAWproject file.
+
+The table below aims to explain the scope format from a music-production perspective and how it compares to other methods of data transfer.
+
+|                                 |                                                               DAWproject                                                               |                      Standard MIDI Files                      |                    Advanced Authoring Format (AAF)                    |
+|---------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------:|:---------------------------------------------------------------------:|
+| Intended Use                    |                                                            Music Production                                                            |                        MIDI Sequencing                        |                         Video Post-Production                         |
+| Time Format<br/>(seconds/beats) |                                                   Beats and seconds can be combined                                                    |                             Beats                             |                                Seconds                                |
+| Audio                           |                  Audio<br/>Events/Clips<br/>Fades<br/>Crossfades<br/>Amplitude<br/>Pan<br/>Time Warping<br/>Transpose                  |                               -                               | Audio<br/>Events/Clips<br/>Fades<br/>Crossfades<br/>Amplitude<br/>Pan |
+| Notes                           |                                                       Notes<br/>Note Expressions                                                       |                             Notes                             |                                   -                                   |
+| Automation                      | Tempo<br/>Time Signature<br/>MIDI Messages<br/>Volume<br/>Pan<br/>Mute<br/>Sends<br/>Plug-in Parameters<br/>Built-in Device Parameters | Tempo<br/>Time Signature<br/>MIDI Messages<br/>SysEx Messages |              Volume<br/>Pan<br/>Video Related Parameters              |
+| Plug-ins                        |                                       Stores full plug-in state<br/>and automation of parameters                                       |                               -                               |                                   -                                   |
+| Built-in Devices                |                                 Generic EQ<br/>Generic Compressor<br/>Generic Gate<br/>Generic Limiter                                 |                               -                               |                                   -                                   |
+| Clip Launcher                   |                                                            Clips<br/>Scenes                                                            |                               -                               |                                   -                                   |
+
+## Status
+
+The format is version 1.0 and is stable. 
+
+## Goals
+
+* Package all user data of a project/song into a single file.
+  * Audio timeline data
+  * Note timeline data
+  * Note expression data
+  * Automation timeline data
+  * Audio data (embedded or referenced)
+  * Plug-in states (always embedded)
+* The format should be able to preserve as much user created data as feasible.
+* The format should be able to express the track and timeline structures of the exporting DAW as is, leaving it up to the importer to use this data and flatten it as needed.
+* Simple to implement
+* Built upon established open standards
+* Language agnostic, no special dependencies
+* Open & free
+
+## Non-goals
+
+* Being the native file-format for a DAW
+* Optimal performance (like a binary format could provide)
+* Storing low-level MIDI events directly (but rather relying on higher level abstractions)
+* Storing non-session data (view settings, preferences) 
+
+## Format Specification
+
+* File Extension: .dawproject
+* Container: ZIP
+* Format: XML (project.xml, metadata.xml)
+* Text encoding: UTF-8
+* The exporting DAW is free to choose the directory structure it wants for media and plug-in files.
+
+* [DAWproject XML Reference](https://htmlpreview.github.io/?https://github.com/bitwig/dawproject/blob/main/Reference.html)
+* [Project XML Schema](Project.xsd)
+* [MetaData XML Schema](MetaData.xsd)
+
+## Language Support
+
+DAWproject is based on plain XML/ZIP and can be used with any programming language that can parse those.
+
+The DOM of DAWproject is defined by a set of Java classes which have XML-related annotations and HTML-induced Javadoc comments.
+Those are used (via reflection) to generate XML Documentation and Schemas. Potentially, the same approach could be used to generate code for other languages (contributions welcome).
+
+## Building the Library, Documentation and Tests
+
+Requires Java Runtime version 16 or later.
+
+To build (using Gradle):
+
+```
+./gradlew build
+```
+
+## Example project
+
+The exporting application is free to structure tracks and timelines in a way that fits its internal model.
+The choice is left to the importing application to either use the level of structure provided (if applicable) or to flatten/convert it to match its model. 
+
+As an example, here's the project.xml of a simple file saved in Bitwig Studio 5.0 with one instrument track and one audio track. As the audio clips in Bitwig Studio are themselves a timeline of audio events, you will notice that there are two levels of <Clips> elements, id25 representing the clip timeline on the arrangement, and id26 representing the  audio events inside the clip.
+
+```xml
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project version="1.0">
+  <Application name="Bitwig Studio" version="5.0"/>
+  <Transport>
+    <Tempo max="666.000000" min="20.000000" unit="bpm" value="149.000000" id="id0" name="Tempo"/>
+    <TimeSignature denominator="4" numerator="4" id="id1"/>
+  </Transport>
+  <Structure>
+    <Track contentType="notes" loaded="true" id="id2" name="Bass" color="#a2eabf">
+      <Channel audioChannels="2" destination="id15" role="regular" solo="false" id="id3">
+        <Devices>
+          <ClapPlugin deviceID="org.surge-synth-team.surge-xt" deviceName="Surge XT" deviceRole="instrument" loaded="true" id="id7" name="Surge XT">
+            <Parameters/>
+            <Enabled value="true" id="id8" name="On/Off"/>
+            <State path="plugins/d19b1f6e-bbb6-42fe-a6c9-54b41d97a05d.clap-preset"/>
+          </ClapPlugin>
+        </Devices>
+        <Mute value="false" id="id6" name="Mute"/>
+        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id5" name="Pan"/>
+        <Volume max="2.000000" min="0.000000" unit="linear" value="0.659140" id="id4" name="Volume"/>
+      </Channel>
+    </Track>
+    <Track contentType="audio" loaded="true" id="id9" name="Drumloop" color="#b53bba">
+      <Channel audioChannels="2" destination="id15" role="regular" solo="false" id="id10">
+        <Mute value="false" id="id13" name="Mute"/>
+        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id12" name="Pan"/>
+        <Volume max="2.000000" min="0.000000" unit="linear" value="0.177125" id="id11" name="Volume"/>
+      </Channel>
+    </Track>
+    <Track contentType="audio notes" loaded="true" id="id14" name="Master">
+      <Channel audioChannels="2" role="master" solo="false" id="id15">
+        <Mute value="false" id="id18" name="Mute"/>
+        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id17" name="Pan"/>
+        <Volume max="2.000000" min="0.000000" unit="linear" value="1.000000" id="id16" name="Volume"/>
+      </Channel>
+    </Track>
+  </Structure>
+  <Arrangement id="id19">
+    <Lanes timeUnit="beats" id="id20">
+      <Lanes track="id2" id="id21">
+        <Clips id="id22">
+          <Clip time="0.0" duration="8.0" playStart="0.0">
+            <Notes id="id23">
+              <Note time="0.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
+              <Note time="1.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
+              <Note time="4.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
+              <Note time="5.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
+              <Note time="0.500000" duration="0.250000" channel="0" key="64" vel="0.787402" rel="0.787402"/>
+              <Note time="4.500000" duration="0.250000" channel="0" key="64" vel="0.787402" rel="0.787402"/>
+              <Note time="1.500000" duration="2.500000" channel="0" key="53" vel="0.787402" rel="0.787402"/>
+              <Note time="5.500000" duration="0.250000" channel="0" key="53" vel="0.787402" rel="0.787402"/>
+              <Note time="6.000000" duration="2.000000" channel="0" key="53" vel="0.787402" rel="0.787402"/>
+            </Notes>
+          </Clip>
+        </Clips>
+      </Lanes>
+      <Lanes track="id9" id="id24">
+        <Clips id="id25">
+          <Clip time="0.0" duration="8.00003433227539" playStart="0.0" loopStart="0.0" loopEnd="8.00003433227539" fadeTimeUnit="beats" fadeInTime="0.0" fadeOutTime="0.0" name="Drumfunk3 170bpm">
+            <Clips id="id26">
+              <Clip time="0.0" duration="8.00003433227539" contentTimeUnit="beats" playStart="0.0" fadeTimeUnit="beats" fadeInTime="0.0" fadeOutTime="0.0">
+                <Warps contentTimeUnit="seconds" timeUnit="beats" id="id28">
+                  <Audio algorithm="stretch" channels="2" duration="2.823541666666667" sampleRate="48000" id="id27">
+                    <File path="audio/Drumfunk3 170bpm.wav"/>
+                  </Audio>
+                  <Warp time="0.0" contentTime="0.0"/>
+                  <Warp time="8.00003433227539" contentTime="2.823541666666667"/>
+                </Warps>
+              </Clip>
+            </Clips>
+          </Clip>
+        </Clips>
+      </Lanes>
+      <Lanes track="id14" id="id29">
+        <Clips id="id30"/>
+      </Lanes>
+    </Lanes>
+  </Arrangement>
+  <Scenes/>
+</Project>
+```
+
+## DAW Support
+
+DAWproject 1.0 is currently supported by the following DAWs
+
+* Bitwig Studio 5.0.9
+* PreSonus Studio One 6.5
+* Steinberg Cubase 14
+
+## Converters
+
+There are various tools that can convert from and to DAWproject files
+
+* https://github.com/SatyrDiamond/DawVert: various formats
+* https://github.com/git-moss/ProjectConverter: Cockos Reaper
+---
+
 #### master-plan.md
 # FL Studio to Cubase Migration Tool
 
 ## Overview
-A Python-based tool to accurately transfer audio arrangements from FL Studio to Cubase while preserving clip positions, colors, and organization across multiple arrangements. Uses XML as an intermediate format for debugging and validation.
+A Python-based tool to accurately transfer audio arrangements from FL Studio to Cubase while preserving clip positions, colors, and organization across multiple arrangements. Uses "DAWProject" as an intermediate format for debugging and validation.
 
 ## Objectives
 - Maintain precise clip positions and timing
@@ -492,16 +681,14 @@ A Python-based tool to accurately transfer audio arrangements from FL Studio to 
 - Support multiple arrangements with folder structure
 - Automate the export process to minimize manual work
 - Handle large projects (~1000 clips) efficiently
-- Provide detailed debugging information through XML output
 - Enable easy troubleshooting of conversion issues
 
 ## Technical Stack
 - Core: Python 3.8+
 - FL Studio Project Parsing: PyFLP library
 - Audio Processing: Direct file operations
-- Export Format: XML (Extensible Markup Language)
+- Export Format: DAWProject
 - Project Structure: Directory-based with arrangement folders
-- XML Processing: lxml library
 
 ## Core Features
 
@@ -522,32 +709,21 @@ A Python-based tool to accurately transfer audio arrangements from FL Studio to 
 - Support for multiple arrangements
 - Audio file validation and verification
 
-### 3. XML Generation
-- Create XML files containing:
+### 3. DAWProject Generation
+- Create DAWProject files containing:
   - Clip positions
   - Color information
   - Track organization
   - Timing metadata
   - Audio file references
   - Debug information
-- One XML file per arrangement
-- Human-readable format for easy debugging
+- DAWProject should contain all arrangements
 
 ### 4. File Organization
 - Create organized folder structure:
 ```
 output/
-  ├── NAGRYWKI_MAIN/
-  │   ├── audio_files/
-  │   └── arrangement.xml
-  ├── NAGRYWKI_CHOREK_VERSE_2/
-  │   ├── audio_files/
-  │   └── arrangement.xml
-  ├── debug/
-  │   ├── parser_logs/
-  │   │   └── parsing_debug.log
-  │   └── conversion_data/
-  │       └── metadata_dump.json
+  ├── sample_project.dawproject
   └── ...
 ```
 
@@ -558,15 +734,15 @@ output/
 2. Implement basic audio file extraction
 3. Create folder structure management
 4. Add comprehensive logging system
-5. Implement XML schema definition
+5. Implement DAWProject schema definition
 
-### Phase 2: XML Generation
-1. Implement XML metadata generation
+### Phase 2: DAWProject Generation
+1. Implement DAWProject metadata generation
 2. Add clip position mapping
 3. Integrate color preservation
 4. Create track organization structure
 5. Add debugging information
-6. Validate XML against schema
+6. Validate DAWProject against schema
 
 ### Phase 3: Debugging & Validation
 1. Add parser debug logs
@@ -575,32 +751,13 @@ output/
 4. Add data integrity checks
 5. Generate human-readable debug output
 
-### Phase 4: Cubase Integration
-1. FL Studio to Cubase:
-   - Export audio structure
-   - Generate XML format
-   - Document clip properties
-   - Maintain arrangement organization
-
-2. XML to Cubase Import:
-   - Create Cubase import templates
-   - Map XML data to Cubase format
-   - Handle color mappings
-   - Support track organization
-
-3. Debugging Support:
-   - Generate detailed logs
-   - Track conversion steps
-   - Validate output accuracy
-   - Provide troubleshooting tools
-
 ## Technical Considerations
 
 ### Performance
 - Batch processing for large projects
 - Efficient memory usage for 1000+ clips
 - Progress tracking for long operations
-- XML generation optimization
+- DAWProject generation optimization
 
 ### Error Handling
 - Validate FL Studio project structure
@@ -608,13 +765,6 @@ output/
 - Handle corrupt project files
 - Provide clear error messages
 - Generate detailed debug logs
-
-### XML Structure
-- Clear, hierarchical organization
-- Human-readable format
-- Comprehensive metadata
-- Validation support
-- Easy debugging access
 
 ### Debug Features
 - Detailed parsing logs
@@ -641,34 +791,7 @@ output/
 ## Known Limitations
 1. FL Studio's limited API access requires parsing workarounds
 2. Need to handle large project sizes carefully
-3. XML file size may grow with project complexity
-
-## Usage Instructions
-```python
-# Basic usage
-project = fl2cu.parse("project.flp")
-fl2cu.save(project, "output_dir", format="xml")
-
-# Debug mode
-fl2cu.save(project, "output_dir", format="xml", debug=True)
-
-# XML validation
-fl2cu.validate_xml("output_dir/arrangement.xml")
-```
-
-## Debug Tools
-1. XML validation tool
-2. Parsing log analyzer
-3. Conversion step tracker
-4. Audio file validator
-5. Data integrity checker
-
-## Documentation
-1. XML schema reference
-2. Debug log interpretation guide
-3. Error code documentation
-4. Troubleshooting procedures
-5. Common issues and solutions
+3. DAWProject file size may grow with project complexity
 ---
 
 #### mypy.ini
@@ -951,7 +1074,7 @@ from typing import Dict, Union
 
 from .core.project_parser import FLProjectParser
 from .core.audio_processor import AudioProcessor
-from .core.aaf_generator import AAFGenerator
+from .core.dawproject_generator import DAWProjectGenerator
 from .utils.file_manager import FileManager
 from .utils.logger import setup_logger
 from .models.project import Project
@@ -976,11 +1099,11 @@ def save(project: Project, output_dir: Union[str, Path]) -> Dict[str, Path]:
         [clip for arr in project.arrangements for clip in arr.clips]
     )
     
-    # Generate AAF files
+    # Generate DAWproject files
     output_files = {}
     for arrangement in project.arrangements:
         arr_dir = arrangement_dirs[arrangement]
-        aaf_path = arr_dir / f"{arrangement.name}.aaf"
+        dawproject_path = arr_dir / f"{arrangement.name}.dawproject"
         
         # Get clip paths for this arrangement
         arrangement_clips = {
@@ -988,11 +1111,11 @@ def save(project: Project, output_dir: Union[str, Path]) -> Dict[str, Path]:
             if clip in arrangement.clips
         }
         
-        # Generate AAF
-        generator = AAFGenerator(arrangement, arrangement_clips)
-        generator.generate_aaf(str(aaf_path))
+        # Generate DAWproject
+        generator = DAWProjectGenerator(arrangement, arrangement_clips)
+        generator.generate_dawproject(str(dawproject_path))
         
-        output_files[arrangement.name] = aaf_path
+        output_files[arrangement.name] = dawproject_path
         
     return output_files
 
@@ -1003,21 +1126,19 @@ setup_logger()
 
 #### src\fl2cu\__main__.py
 ```
-"""FL Studio to Cubase migration tool - Main module."""
-
+# src/fl2cu/__main__.py
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict
 
 from .core.project_parser import FLProjectParser
-from .core.aaf_generator import AAFGenerator
+from .core.dawproject_generator import DAWProjectGenerator
 from .utils.file_manager import FileManager
 from .utils.logger import setup_logger, get_logger
-from .aaf_inspector import AAFInspector
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Convert FL Studio projects to Cubase-compatible AAF format"
+        description="Convert FL Studio projects to DAWproject format"
     )
     
     parser.add_argument(
@@ -1033,12 +1154,6 @@ def parse_args() -> argparse.Namespace:
     )
     
     parser.add_argument(
-        "--inspect",
-        action="store_true",
-        help="Inspect generated AAF files after creation"
-    )
-    
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug logging"
@@ -1051,7 +1166,7 @@ def process_project(
     output_dir: Path,
     debug: bool = False
 ) -> Dict[str, Path]:
-    """Process FL Studio project and generate AAF files."""
+    """Process FL Studio project and generate DAWproject files."""
     logger = get_logger()
     
     # Parse FL Studio project
@@ -1062,6 +1177,15 @@ def process_project(
     # Log project details
     logger.debug(f"Project name: {project.name}")
     logger.debug(f"Number of arrangements: {len(project.arrangements)}")
+    for arr in project.arrangements:
+        logger.debug(f"Arrangement '{arr.name}' contains {len(arr.clips)} clips")
+        if debug:
+            for clip in arr.clips:
+                logger.debug(f"  Clip: {clip.name}")
+                logger.debug(f"    Position: {clip.position}")
+                logger.debug(f"    Duration: {clip.duration}")
+                logger.debug(f"    Source path: {clip.source_path}")
+
     # Create file manager and directories
     logger.debug(f"Creating directory structure in {output_dir}")
     file_manager = FileManager(str(output_dir))
@@ -1094,23 +1218,17 @@ def process_project(
     
     if not clip_paths:
         logger.error("No valid audio clips were found in the project")
-        logger.error("Clip details for debugging:")
-        for clip in all_clips:
-            logger.error(f"  Clip: {clip.name}")
-            logger.error(f"    Source path: {clip.source_path}")
-            if clip.source_path:
-                logger.error(f"    Path exists: {clip.source_path.exists()}")
         raise ValueError("No valid audio clips were found in the project")
     
-    # Generate AAF files
-    logger.info("Generating AAF files...")
-    aaf_paths = {}
+    # Generate DAWproject files
+    logger.info("Generating DAWproject files...")
+    dawproject_paths = {}
     
     for arrangement in project.arrangements:
         try:
             logger.debug(f"Processing arrangement: {arrangement.name}")
             arr_dir = arrangement_dirs[arrangement]
-            aaf_path = arr_dir / f"{arrangement.name}.aaf"
+            dawproject_path = arr_dir / f"{arrangement.name}.dawproject"
             
             # Get clips for this arrangement
             arrangement_clips = {
@@ -1120,44 +1238,22 @@ def process_project(
             
             logger.debug(f"Found {len(arrangement_clips)} clips for arrangement {arrangement.name}")
             
-            # Generate AAF
-            logger.debug(f"Generating AAF file: {aaf_path}")
-            generator = AAFGenerator(arrangement, arrangement_clips)
-            generator.generate_aaf(str(aaf_path))
+            # Generate DAWproject
+            logger.debug(f"Generating DAWproject file: {dawproject_path}")
+            generator = DAWProjectGenerator(arrangement, arrangement_clips)
+            generator.generate_dawproject(str(dawproject_path))
             
-            aaf_paths[arrangement.name] = aaf_path
-            logger.info(f"Generated AAF for arrangement: {arrangement.name}")
+            dawproject_paths[arrangement.name] = dawproject_path
+            logger.info(f"Generated DAWproject for arrangement: {arrangement.name}")
             
         except Exception as e:
-            logger.error(f"Failed to generate AAF for arrangement {arrangement.name}")
+            logger.error(f"Failed to generate DAWproject for arrangement {arrangement.name}")
             logger.error(f"Error details: {str(e)}")
             if debug:
                 logger.exception("Full traceback:")
             continue
     
-    return aaf_paths
-
-def inspect_aaf_files(aaf_paths: Dict[str, Path], output_dir: Path) -> None:
-    """Inspect generated AAF files and save analysis."""
-    logger = get_logger()
-    logger.info("Inspecting generated AAF files...")
-    
-    inspection_dir = output_dir / "aaf_inspection"
-    inspection_dir.mkdir(exist_ok=True)
-    logger.debug(f"Created inspection directory: {inspection_dir}")
-    
-    for arr_name, aaf_path in aaf_paths.items():
-        try:
-            logger.debug(f"Inspecting AAF file for arrangement: {arr_name}")
-            inspector = AAFInspector(str(aaf_path))
-            analysis_path = inspection_dir / f"{arr_name}_analysis.json"
-            inspector.save_analysis(str(analysis_path))
-            
-            logger.info(f"Saved AAF analysis for {arr_name} to {analysis_path}")
-            
-        except Exception as e:
-            logger.error(f"Failed to inspect AAF for {arr_name}")
-            logger.error(f"Error details: {str(e)}")
+    return dawproject_paths
 
 def main() -> int:
     """Main entry point."""
@@ -1193,23 +1289,19 @@ def main() -> int:
         logger.debug(f"Created/verified output directory: {output_dir}")
         
         # Process project
-        aaf_paths = process_project(
+        dawproject_paths = process_project(
             input_file=input_file,
             output_dir=output_dir,
             debug=args.debug
         )
         
-        if not aaf_paths:
-            logger.error("No AAF files were generated")
+        if not dawproject_paths:
+            logger.error("No DAWproject files were generated")
             return 1
         
-        # Inspect AAF files if requested
-        if args.inspect:
-            inspect_aaf_files(aaf_paths, output_dir)
-        
         logger.info("Processing complete!")
-        logger.info("\nGenerated AAF files:")
-        for name, path in aaf_paths.items():
+        logger.info("\nGenerated DAWproject files:")
+        for name, path in dawproject_paths.items():
             logger.info(f"- {name}: {path}")
             
         return 0
@@ -1226,160 +1318,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-```
----
-
-#### src\fl2cu\aaf_inspector.py
-```
-from typing import Dict, List, Optional
-from pathlib import Path
-
-class AAFInspector:
-    """Inspector for analyzing AAF file structure and content."""
-    
-    def __init__(self, aaf_path: str):
-        """Initialize with path to AAF file."""
-        self.aaf_path = Path(aaf_path)
-        if not self.aaf_path.exists():
-            raise FileNotFoundError(f"AAF file not found: {aaf_path}")
-            
-    def analyze_file(self) -> Dict:
-        """Perform complete analysis of AAF file."""
-        with aaf2.open(str(self.aaf_path), 'r') as f:
-            analysis = {
-                'file_info': self._get_file_info(),
-                'composition': self._analyze_composition(f),
-                'mobs': self._analyze_mobs(f),
-                'media_references': self._analyze_media_refs(f),
-                'potential_issues': self._check_common_issues(f)
-            }
-            return analysis
-            
-    def _get_file_info(self) -> Dict:
-        """Get basic file information."""
-        return {
-            'filename': self.aaf_path.name,
-            'size': self.aaf_path.stat().st_size,
-            'last_modified': self.aaf_path.stat().st_mtime
-        }
-        
-    def _analyze_composition(self, f: 'aaf2.File') -> Dict:
-        """Analyze main composition structure."""
-        try:
-            comp = next(f.content.toplevel())
-            return {
-                'name': comp.name,
-                'mob_id': str(comp.mob_id),
-                'slots': len(comp.slots),
-                'usage_code': getattr(comp, 'usage_code', None),
-                'creation_time': getattr(comp, 'creation_time', None)
-            }
-        except StopIteration:
-            return {'error': 'No composition found'}
-            
-    def _analyze_mobs(self, f: 'aaf2.File') -> List[Dict]:
-        """Analyze all mobs (media objects) in the file."""
-        mobs = []
-        for mob in f.content.mobs:
-            mob_data = {
-                'name': getattr(mob, 'name', None),
-                'mob_id': str(mob.mob_id),
-                'type': mob.__class__.__name__,
-                'slots': self._analyze_slots(mob),
-                'attributes': self._get_mob_attributes(mob)
-            }
-            mobs.append(mob_data)
-        return mobs
-        
-    def _analyze_slots(self, mob: 'aaf2.Mob') -> List[Dict]:
-        """Analyze slots in a mob."""
-        slots = []
-        for slot in mob.slots:
-            slot_data = {
-                'name': getattr(slot, 'name', None),
-                'slot_id': getattr(slot, 'slot_id', None),
-                'segment': {
-                    'type': slot.segment.__class__.__name__,
-                    'length': getattr(slot.segment, 'length', None)
-                }
-            }
-            # Add timing information if available
-            if hasattr(slot, 'start_time'):
-                slot_data['start_time'] = slot.start_time
-            if hasattr(slot, 'duration'):
-                slot_data['duration'] = slot.duration
-            
-            slots.append(slot_data)
-        return slots
-        
-    def _get_mob_attributes(self, mob: 'aaf2.Mob') -> Dict:
-        """Get mob attributes including user comments."""
-        attributes = {}
-        if hasattr(mob, 'user_comments'):
-            attributes['user_comments'] = dict(mob.user_comments)
-        if hasattr(mob, 'attributes'):
-            attributes['mob_attributes'] = {
-                k: str(v) for k, v in mob.attributes.items()
-            }
-        return attributes
-        
-    def _analyze_media_refs(self, f: 'aaf2.File') -> List[Dict]:
-        """Analyze media references."""
-        refs = []
-        for mob in f.content.mobs:
-            for slot in mob.slots:
-                if hasattr(slot.segment, 'components'):
-                    for comp in slot.segment.components:
-                        if hasattr(comp, 'source_ref'):
-                            ref_data = {
-                                'mob_id': str(comp.source_ref.mob_id),
-                                'slot_id': comp.source_ref.slot_id,
-                                'start_time': getattr(comp, 'start_time', None),
-                                'duration': getattr(comp, 'length', None)
-                            }
-                            refs.append(ref_data)
-        return refs
-        
-    def _check_common_issues(self, f: 'aaf2.File') -> List[str]:
-        """Check for common issues that might cause import problems."""
-        issues = []
-        
-        # Check for composition
-        try:
-            next(f.content.toplevel())
-        except StopIteration:
-            issues.append("No composition found")
-            
-        # Check media references
-        for mob in f.content.mobs:
-            if isinstance(mob, aaf2.components.SourceMob):
-                if not any(hasattr(slot.segment, 'components') 
-                          for slot in mob.slots):
-                    issues.append(f"Source mob '{mob.name}' has no components")
-                    
-        # Check for invalid durations
-        for mob in f.content.mobs:
-            for slot in mob.slots:
-                if hasattr(slot, 'duration') and slot.duration <= 0:
-                    issues.append(f"Invalid duration in mob '{mob.name}'")
-                    
-        # Check for broken references
-        mob_ids = {str(mob.mob_id) for mob in f.content.mobs}
-        for mob in f.content.mobs:
-            for slot in mob.slots:
-                if hasattr(slot.segment, 'components'):
-                    for comp in slot.segment.components:
-                        if (hasattr(comp, 'source_ref') and 
-                            str(comp.source_ref.mob_id) not in mob_ids):
-                            issues.append(f"Broken reference in mob '{mob.name}'")
-                            
-        return issues
-
-    def save_analysis(self, output_path: str) -> None:
-        """Save analysis to JSON file."""
-        analysis = self.analyze_file()
-        with open(output_path, 'w') as f:
-            json.dump(analysis, f, indent=2, default=str)
 ```
 ---
 
@@ -1437,22 +1375,45 @@ class Config:
 
 from .project_parser import FLProjectParser
 from .audio_processor import AudioProcessor
-from .aaf_generator import AAFGenerator
+from .dawproject_generator import DAWProjectGenerator
 
-__all__ = ['FLProjectParser', 'AudioProcessor', 'AAFGenerator']
+__all__ = ['FLProjectParser', 'AudioProcessor', 'DAWProjectGenerator']
 ```
 ---
 
-#### src\fl2cu\core\aaf_generator.py
+#### src\fl2cu\core\audio_processor.py
+```
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from ..models.clip import Clip
+
+class AudioProcessor:
+
+    def validate_audio_files(self, clips: List[Clip]) -> Dict[Clip, Path]:
+        """Validate processed audio files."""
+        valid_clips = {}
+        
+        for clip, path in self.process_audio_clips(clips).items():
+            with wave.open(str(path), 'rb') as wav_file:
+                # Verify it's standard PCM format
+                if wav_file.getcomptype() == 'NONE':
+                    valid_clips[clip] = path
+                
+        return valid_clips
+```
+---
+
+#### src\fl2cu\core\dawproject_generator.py
 ```
 from pathlib import Path
 from typing import Dict, Optional, Any
-
+from xml.etree import ElementTree as ET
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
 
-class AAFGenerator:
-    """Generates AAF files from arrangements using direct WAV linking."""
+class DAWProjectGenerator:
+    """Generates DAWproject format ZIP containers with XML and audio files."""
     
     def __init__(self, arrangement: Arrangement, clip_paths: Dict[Clip, Path]):
         self.arrangement = arrangement
@@ -1480,132 +1441,147 @@ class AAFGenerator:
             self.logger.error(f"Failed to parse ffprobe output: {e}")
             raise
 
-    def generate_aaf(self, output_path: str) -> None:
-        """Generate AAF file with the arrangement."""
-        self.logger.info(f"Creating AAF file at {output_path}")
+    def _create_project_xml(self) -> ET.Element:
+        """Create the project.xml content."""
+        # Create root Project element
+        root = ET.Element("Project", version="1.0")
         
-        try:
-            with aaf2.open(output_path, 'w') as f:
-                # Create the composition mob for the arrangement
-                comp_mob = f.create.CompositionMob(self.arrangement.name)
-                f.content.mobs.append(comp_mob)
-                
-                # Create a timeline mobslot for audio
-                edit_rate = 48000  # Standard audio sample rate
-                sequence = f.create.Sequence(media_kind="sound")
-                timeline_slot = comp_mob.create_timeline_slot(edit_rate)
-                timeline_slot.segment = sequence
-
-                # Process each clip
-                for clip in self.arrangement.clips:
-                    source_path = self.clip_paths.get(clip)
-                    if not source_path or not source_path.exists():
-                        self.logger.warning(f"Audio file not found for clip: {clip.name}")
-                        continue
-
-                    try:
-                        # Get audio metadata using ffprobe
-                        metadata = self._probe_audio(str(source_path))
-                        
-                        # Create master mob and source mob
-                        master_mob, source_mob, tape_mob = f.content.link_external_wav(metadata)
-                        f.content.mobs.append(master_mob)
-                        f.content.mobs.append(source_mob)
-                        f.content.mobs.append(tape_mob)
-
-                        # Create source clip referencing the master mob
-                        source_clip = master_mob.create_source_clip(
-                            slot_id=1,  # Use slot_id parameter instead of slot property
-                            start=int(clip.position * edit_rate),
-                            length=int(clip.duration * edit_rate)
-                        )
-                        
-                        # Add the clip to the sequence
-                        sequence.components.append(source_clip)
-                        
-                        self.logger.debug(f"Added clip {clip.name} at position {clip.position}")
-
-                    except Exception as e:
-                        self.logger.error(f"Failed to process clip {clip.name}: {str(e)}")
-                        raise
-
-                # Save the file
-                f.save()
-                self.logger.info("AAF file successfully generated")
-
-        except Exception as e:
-            self.logger.error(f"Failed to generate AAF file: {str(e)}")
-            raise e
-```
----
-
-#### src\fl2cu\core\audio_processor.py
-```
-from pathlib import Path
-from typing import Dict, List, Optional
-
-from ..models.clip import Clip
-
-class AudioProcessor:
-    """Handles audio file validation and conversion."""
-    
-    def __init__(self, output_dir: str) -> None:
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.logger = logging.getLogger(__name__)
-        self.temp_dir = Path(tempfile.mkdtemp())
-
-    def _convert_to_standard_wav(self, input_path: Path) -> Optional[Path]:
-        """Convert audio file to standard PCM WAV format using soundfile."""
-        # Create temp output path
-        output_path = self.temp_dir / f"{input_path.stem}_converted.wav"
+        # Add Application metadata
+        app = ET.SubElement(root, "Application", name="FL Studio Converter", version="1.0")
         
-        # Read using soundfile (supports many formats)
-        data, sample_rate = sf.read(str(input_path))
+        # Create Transport element for tempo/time signature
+        transport = ET.SubElement(root, "Transport")
+        tempo = ET.SubElement(transport, "Tempo", unit="bpm", value="120", min="20", max="999")
+        time_sig = ET.SubElement(transport, "TimeSignature", numerator="4", denominator="4")
         
-        # Convert to float32 for processing
-        data = data.astype(np.float32)
+        # Create Structure section
+        structure = ET.SubElement(root, "Structure")
         
-        # If mono, reshape to 2D array
-        if len(data.shape) == 1:
-            data = data.reshape(-1, 1)
+        # Create audio track
+        track = ET.SubElement(structure, "Track", 
+                            contentType="audio",
+                            loaded="true",
+                            id=f"track-{self.arrangement.name}",
+                            name=self.arrangement.name)
         
-        # Write as standard PCM WAV
-        sf.write(str(output_path), data, sample_rate, subtype='PCM_16')
+        # Create channel for the track
+        channel = ET.SubElement(track, "Channel",
+                              audioChannels="2",
+                              role="regular",
+                              solo="false",
+                              id=f"channel-{self.arrangement.name}")
         
-        return output_path
+        # Add standard channel controls
+        ET.SubElement(channel, "Volume", value="1.0", min="0.0", max="2.0", unit="linear")
+        ET.SubElement(channel, "Pan", value="0.5", min="0.0", max="1.0", unit="normalized")
+        ET.SubElement(channel, "Mute", value="false")
 
-    def process_audio_clips(self, clips: list) -> dict:
-        """Process and validate audio clips, converting formats if needed."""
-        processed_clips = {}
+        # Create Arrangement section
+        arrangement = ET.SubElement(root, "Arrangement", id="main-arrangement")
         
-        for clip in clips:
-            if not clip.source_path or not clip.source_path.exists():
-                self.logger.warning(f"Source file not found: {clip.source_path}")
+        # Create Lanes section
+        lanes = ET.SubElement(arrangement, "Lanes", timeUnit="beats")
+        
+        # Create track lanes
+        track_lanes = ET.SubElement(lanes, "Lanes", track=f"track-{self.arrangement.name}")
+        
+        # Create clips container
+        clips = ET.SubElement(track_lanes, "Clips")
+
+        # Process each audio clip
+        for clip in self.arrangement.clips:
+            source_path = self.clip_paths.get(clip)
+            if not source_path or not source_path.exists():
+                self.logger.warning(f"Audio file not found for clip: {clip.name}")
                 continue
 
-             # Create output filename
-            output_path = self.output_dir / f"{clip.name}.wav"
-            
-            # Convert to standard PCM WAV
-            if self._convert_to_pcm_wav(clip.source_path, output_path):
-                processed_clips[clip] = output_path
-            else:
-                self.logger.error(f"Failed to process {clip.name}")
-
-        return processed_clips
-
-    def validate_audio_files(self, clips: List[Clip]) -> Dict[Clip, Path]:
-        """Validate processed audio files."""
-        valid_clips = {}
-        
-        for clip, path in self.process_audio_clips(clips).items():
-            with wave.open(str(path), 'rb') as wav_file:
-                # Verify it's standard PCM format
-                if wav_file.getcomptype() == 'NONE':
-                    valid_clips[clip] = path
+            try:
+                # Get audio metadata
+                metadata = self._probe_audio(str(source_path))
+                stream = metadata['streams'][0]
                 
-        return valid_clips
+                # Create clip element
+                clip_el = ET.SubElement(clips, "Clip",
+                                      time=str(clip.position),
+                                      duration=str(clip.duration),
+                                      name=clip.name)
+                
+                # Create audio within clip
+                audio = ET.SubElement(clip_el, "Audio",
+                                    channels=str(stream.get('channels', 2)),
+                                    duration=str(stream.get('duration', clip.duration)),
+                                    sampleRate=str(stream.get('sample_rate', 44100)))
+                
+                # Add file reference - use relative path within ZIP
+                audio_rel_path = f"audio/{clip.name}.wav"
+                file_ref = ET.SubElement(audio, "File", path=audio_rel_path)
+                
+                self.logger.debug(f"Added clip {clip.name} at position {clip.position}")
+
+            except Exception as e:
+                self.logger.error(f"Failed to process clip {clip.name}: {str(e)}")
+                raise
+
+        return root
+
+    def _create_metadata_xml(self) -> ET.Element:
+        """Create the metadata.xml content."""
+        root = ET.Element("MetaData")
+        ET.SubElement(root, "Title").text = self.arrangement.name
+        return root
+
+    def generate_dawproject(self, output_path: str) -> None:
+        """Generate DAWproject file (ZIP container with XML and audio)."""
+        self.logger.info(f"Creating DAWproject file at {output_path}")
+        
+        try:
+            # Create a temporary directory for preparing files
+            temp_dir = Path(output_path).parent / f"temp_{self.arrangement.name}"
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            
+            try:
+                # Create project.xml
+                project_xml = self._create_project_xml()
+                xml_str = ET.tostring(project_xml, encoding='unicode', method='xml')
+                with open(temp_dir / "project.xml", 'w', encoding='utf-8') as f:
+                    f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                    f.write(xml_str)
+
+                # Create metadata.xml
+                metadata_xml = self._create_metadata_xml()
+                xml_str = ET.tostring(metadata_xml, encoding='unicode', method='xml')
+                with open(temp_dir / "metadata.xml", 'w', encoding='utf-8') as f:
+                    f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+                    f.write(xml_str)
+
+                # Create audio directory and copy files
+                audio_dir = temp_dir / "audio"
+                audio_dir.mkdir(exist_ok=True)
+                
+                for clip, source_path in self.clip_paths.items():
+                    if clip in self.arrangement.clips:
+                        dest_path = audio_dir / f"{clip.name}.wav"
+                        shutil.copy2(source_path, dest_path)
+
+                # Create ZIP file
+                with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    # Add XML files
+                    zf.write(temp_dir / "project.xml", "project.xml")
+                    zf.write(temp_dir / "metadata.xml", "metadata.xml")
+                    
+                    # Add audio files
+                    for audio_file in audio_dir.glob("*.wav"):
+                        zf.write(audio_file, f"audio/{audio_file.name}")
+
+                self.logger.info("DAWproject file successfully generated")
+
+            finally:
+                # Clean up temp directory
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+        except Exception as e:
+            self.logger.error(f"Failed to generate DAWproject file: {str(e)}")
+            raise
 ```
 ---
 
@@ -1830,72 +1806,6 @@ class FLProjectParser:
             raise
 
         return project
-```
----
-
-#### src\fl2cu\core\xml_generator.py
-```
-from lxml import etree
-from pathlib import Path
-from typing import Dict
-from ..models.arrangement import Arrangement
-from ..models.clip import Clip
-
-class XMLGenerator:
-    def __init__(self, arrangement: Arrangement, clip_paths: Dict[Clip, Path]) -> None:
-        """
-        Initialize XMLGenerator with arrangement and clip paths.
-
-        Args:
-            arrangement: Arrangement object containing clips and metadata.
-            clip_paths: Dictionary mapping Clip objects to their processed audio file paths.
-        """
-        self.arrangement = arrangement
-        self.clip_paths = clip_paths
-
-    def generate_xml(self, output_path: str) -> None:
-        """
-        Generate an XML representation of the arrangement.
-
-        Args:
-            output_path: Path where the XML file will be saved.
-        """
-        root = etree.Element("arrangement", name=self.arrangement.name)
-        for clip in self.arrangement.clips:
-            clip_element = etree.SubElement(root, "clip", name=clip.name)
-            clip_element.set("position", str(clip.position))
-            clip_element.set("duration", str(clip.duration))
-            clip_element.set("color", clip.color)
-            clip_element.set("volume", str(clip.volume))
-            clip_element.set("muted", str(clip.muted).lower())
-
-            if clip in self.clip_paths:
-                clip_element.set("source_path", str(self.clip_paths[clip]))
-
-        tree = etree.ElementTree(root)
-        with open(output_path, "wb") as f:
-            tree.write(f, pretty_print=True, xml_declaration=True, encoding="UTF-8")
-
-    def generate_debug_info(self, debug_dir: str) -> None:
-        """
-        Generate debug information related to the XML generation.
-
-        Args:
-            debug_dir: Directory where debug information will be saved.
-        """
-        debug_path = Path(debug_dir) / "debug_info.txt"
-        with open(debug_path, "w") as f:
-            f.write(f"Arrangement: {self.arrangement.name}\n")
-            f.write(f"Number of Clips: {len(self.arrangement.clips)}\n")
-            for clip in self.arrangement.clips:
-                f.write(f"Clip: {clip.name}\n")
-                f.write(f"  Position: {clip.position}\n")
-                f.write(f"  Duration: {clip.duration}\n")
-                f.write(f"  Color: {clip.color}\n")
-                f.write(f"  Volume: {clip.volume}\n")
-                f.write(f"  Muted: {clip.muted}\n")
-                if clip in self.clip_paths:
-                    f.write(f"  Source Path: {self.clip_paths[clip]}\n")
 ```
 ---
 
