@@ -217,7 +217,7 @@ excluded_extensions = {
     
     # Document and binary files
     '.rtf', '.pdf', '.bin', '.lock',               
-    '.jar', '.bat', '.json', '.xml', '.kts',       
+    '.jar', '.bat', '.json', '.xml', '.kts', '.xsd', '.bat'      
     
     # Python files
     '.pyc', '.pyo', '.pyd',                        
@@ -932,388 +932,91 @@ setup(
 ```
 ---
 
-#### src\__init__.py
-```
-"""FL Studio to Cubase migration tool for transferring audio arrangements."""
-
-from pathlib import Path
-from typing import Union, Dict, Optional
-
-from core.project_parser import FLProjectParser
-from core.audio_processor import AudioProcessor
-from core.xml_generator import XMLGenerator
-from models.project import Project
-from utils.file_manager import FileManager
-from utils.logger import setup_logger, get_logger
-from config import Config
-
-def parse(file: Union[Path, str]) -> Project:
-    """Parse an FL Studio project file into a Project model.
-    
-    Args:
-        file: Path to the FL Studio project file
-    
-    Returns:
-        Parsed Project instance
-    
-    Raises:
-        FileNotFoundError: If project file not found
-        ValueError: If project parsing fails
-    """
-    logger = get_logger()
-    file_path = Path(file)
-    
-    if not file_path.exists():
-        raise FileNotFoundError(f"Project file not found: {file}")
-        
-    try:
-        parser = FLProjectParser(str(file_path))
-        project = parser.parse_project()
-        logger.info(f"Successfully parsed project: {file_path.name}")
-        return project
-    except Exception as e:
-        logger.error(f"Failed to parse project {file_path.name}: {e}")
-        raise
-
-def save(project: Project, 
-         output_dir: Union[Path, str], 
-         temp_dir: Optional[Union[Path, str]] = None,
-         debug: bool = False) -> Dict[str, Path]:
-    """Export project arrangements to XML files with audio.
-    
-    Args:
-        project: Project instance to export
-        output_dir: Directory for output files
-        temp_dir: Optional directory for temporary files (default is system temp)
-        debug: Enable debug output in XML and logs
-    
-    Returns:
-        Dictionary mapping arrangement names to their XML file paths
-    
-    Raises:
-        ValueError: If project validation fails
-        OSError: If file operations fail
-    """
-    logger = get_logger()
-    output_dir = Path(output_dir)
-    
-    # Set up temporary directory
-    if temp_dir:
-        temp_dir = Path(temp_dir)
-    else:
-        temp_dir = Path(tempfile.mkdtemp())
-    
-    try:
-        # Initialize components
-        file_manager = FileManager(str(output_dir))
-        audio_processor = AudioProcessor(str(temp_dir))
-        
-        # Validate project and paths
-        project.validate()
-        if not project.validate_audio_files():
-            raise ValueError("Some audio files are missing")
-        if not file_manager.validate_paths():
-            raise OSError("Failed to validate output directories")
-            
-        # Create directory structure
-        arrangement_dirs = file_manager.create_directory_structure(project)
-        
-        # Process audio files
-        all_clips = [clip for arr in project.arrangements for clip in arr.clips]
-        processed_clips = audio_processor.export_audio_clips(all_clips)
-        
-        if not processed_clips:
-            raise ValueError("No audio clips were processed successfully")
-            
-        # Generate XML files
-        xml_paths = {}
-        for arrangement in project.arrangements:
-            try:
-                arr_dir = arrangement_dirs[arrangement]
-                xml_path = arr_dir / f"{arrangement.name}.xml"
-                
-                # Get relevant processed clips for this arrangement
-                arrangement_clips = {
-                    clip: path for clip, path in processed_clips.items()
-                    if clip in arrangement.clips
-                }
-                
-                # Generate XML
-                generator = XMLGenerator(arrangement, arrangement_clips)
-                generator.generate_xml(str(xml_path))
-                
-                xml_paths[arrangement.name] = xml_path
-                logger.info(f"Generated XML for arrangement: {arrangement.name}")
-                
-                if debug:
-                    debug_dir = output_dir / "debug" / arrangement.name
-                    debug_dir.mkdir(parents=True, exist_ok=True)
-                    generator.generate_debug_info(str(debug_dir))
-                
-            except Exception as e:
-                logger.error(f"Failed to generate XML for arrangement {arrangement.name}: {e}")
-                raise
-                
-        return xml_paths
-        
-    finally:
-        # Clean up temporary files
-        if not temp_dir:
-            file_manager.cleanup_temp_files(temp_dir)
-
-# Initialize logger
-setup_logger()
-```
----
-
 #### src\fl2cu\__init__.py
 ```
-# src/fl2cu/__init__.py
-from pathlib import Path
-from typing import Dict, Union
 
-from .core.project_parser import FLProjectParser
-from .core.audio_processor import AudioProcessor
-from .core.dawproject_generator import DAWProjectGenerator
-from .utils.file_manager import FileManager
-from .utils.logger import setup_logger
-from .models.project import Project
-
-def parse(file: Union[str, Path]) -> Project:
-    """Parse an FL Studio project file."""
-    parser = FLProjectParser(str(file))
-    return parser.parse_project()
-
-def save(project: Project, output_dir: Union[str, Path]) -> Dict[str, Path]:
-    """Save project to output directory."""
-    # Initialize components
-    output_dir = Path(output_dir)
-    file_manager = FileManager(output_dir)
-    audio_processor = AudioProcessor(output_dir)
-    
-    # Create directory structure
-    arrangement_dirs = file_manager.create_directory_structure(project)
-    
-    # Validate audio files
-    clip_paths = audio_processor.validate_audio_files(
-        [clip for arr in project.arrangements for clip in arr.clips]
-    )
-    
-    # Generate DAWproject files
-    output_files = {}
-    for arrangement in project.arrangements:
-        arr_dir = arrangement_dirs[arrangement]
-        dawproject_path = arr_dir / f"{arrangement.name}.dawproject"
-        
-        # Get clip paths for this arrangement
-        arrangement_clips = {
-            clip: path for clip, path in clip_paths.items()
-            if clip in arrangement.clips
-        }
-        
-        # Generate DAWproject
-        generator = DAWProjectGenerator(arrangement, arrangement_clips)
-        generator.generate_dawproject(str(dawproject_path))
-        
-        output_files[arrangement.name] = dawproject_path
-        
-    return output_files
-
-# Set up logging on import
-setup_logger()
 ```
 ---
 
 #### src\fl2cu\__main__.py
 ```
-# src/fl2cu/__main__.py
+# src/fl2cu/main.py
 from pathlib import Path
-from typing import Dict
 
-from .core.project_parser import FLProjectParser
-from .core.dawproject_generator import DAWProjectGenerator
-from .utils.file_manager import FileManager
+from .parser.project_parser import FLProjectParser
+from .generator.dawproject_generator import DAWProjectGenerator
 from .utils.logger import setup_logger, get_logger
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Convert FL Studio projects to DAWproject format"
-    )
-    
-    parser.add_argument(
-        "input_file",
-        type=str,
-        help="Path to FL Studio project file (.flp)"
-    )
-    
-    parser.add_argument(
-        "output_dir",
-        type=str,
-        help="Output directory for generated files"
-    )
-    
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging"
-    )
-    
-    return parser.parse_args()
-
-def process_project(
-    input_file: Path,
-    output_dir: Path,
-    debug: bool = False
-) -> Dict[str, Path]:
-    """Process FL Studio project and generate DAWproject files."""
-    logger = get_logger()
-    
-    # Parse FL Studio project
-    logger.debug(f"Starting to parse project file: {input_file}")
-    parser = FLProjectParser(str(input_file))
-    project = parser.parse_project()
-    
-    # Log project details
-    logger.debug(f"Project name: {project.name}")
-    logger.debug(f"Number of arrangements: {len(project.arrangements)}")
-    for arr in project.arrangements:
-        logger.debug(f"Arrangement '{arr.name}' contains {len(arr.clips)} clips")
-        if debug:
-            for clip in arr.clips:
-                logger.debug(f"  Clip: {clip.name}")
-                logger.debug(f"    Position: {clip.position}")
-                logger.debug(f"    Duration: {clip.duration}")
-                logger.debug(f"    Source path: {clip.source_path}")
-
-    # Create file manager and directories
-    logger.debug(f"Creating directory structure in {output_dir}")
-    file_manager = FileManager(str(output_dir))
-    arrangement_dirs = file_manager.create_directory_structure(project)
-    logger.debug("Created directories:")
-    for arr, path in arrangement_dirs.items():
-        logger.debug(f"  {arr.name}: {path}")
-    
-    # Collect all clips
-    logger.debug("Collecting clip information...")
-    all_clips = []
-    for arr in project.arrangements:
-        logger.debug(f"Processing arrangement: {arr.name}")
-        arr_clips = arr.clips
-        logger.debug(f"Found {len(arr_clips)} clips in arrangement")
-        all_clips.extend(arr_clips)
-    
-    logger.debug(f"Total clips found across all arrangements: {len(all_clips)}")
-    
-    # Create clip paths dictionary
-    clip_paths = {}
-    for clip in all_clips:
-        if clip.source_path and clip.source_path.exists():
-            clip_paths[clip] = clip.source_path
-            logger.debug(f"Valid clip found: {clip.name} -> {clip.source_path}")
-        else:
-            logger.warning(f"Clip {clip.name} has invalid source path: {clip.source_path}")
-    
-    logger.debug(f"Valid clip paths found: {len(clip_paths)}")
-    
-    if not clip_paths:
-        logger.error("No valid audio clips were found in the project")
-        raise ValueError("No valid audio clips were found in the project")
-    
-    # Generate DAWproject files
-    logger.info("Generating DAWproject files...")
-    dawproject_paths = {}
-    
-    for arrangement in project.arrangements:
-        try:
-            logger.debug(f"Processing arrangement: {arrangement.name}")
-            arr_dir = arrangement_dirs[arrangement]
-            dawproject_path = arr_dir / f"{arrangement.name}.dawproject"
-            
-            # Get clips for this arrangement
-            arrangement_clips = {
-                clip: path for clip, path in clip_paths.items()
-                if clip in arrangement.clips
-            }
-            
-            logger.debug(f"Found {len(arrangement_clips)} clips for arrangement {arrangement.name}")
-            
-            # Generate DAWproject
-            logger.debug(f"Generating DAWproject file: {dawproject_path}")
-            generator = DAWProjectGenerator(arrangement, arrangement_clips)
-            generator.generate_dawproject(str(dawproject_path))
-            
-            dawproject_paths[arrangement.name] = dawproject_path
-            logger.info(f"Generated DAWproject for arrangement: {arrangement.name}")
-            
-        except Exception as e:
-            logger.error(f"Failed to generate DAWproject for arrangement {arrangement.name}")
-            logger.error(f"Error details: {str(e)}")
-            if debug:
-                logger.exception("Full traceback:")
-            continue
-    
-    return dawproject_paths
-
-def main() -> int:
-    """Main entry point."""
-    args = parse_args()
-    
-    # Setup logging
-    log_level = logging.DEBUG if args.debug else logging.INFO
+def setup_logging(debug: bool) -> None:
+    level = logging.DEBUG if debug else logging.INFO
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
     setup_logger()
+
+def process_project(input_file: Path, output_dir: Path) -> bool:
     logger = get_logger()
     
     try:
-        # Convert paths to absolute paths
+        parser = FLProjectParser(str(input_file))
+        project = parser.parse_project()
+        
+        if not project.arrangements:
+            logger.error("No arrangements found in project")
+            return False
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        clip_paths = {clip: clip.source_path 
+                     for arr in project.arrangements 
+                     for clip in arr.clips}
+        
+        generator = DAWProjectGenerator(
+            arrangements=project.arrangements,
+            clip_paths=clip_paths
+        )
+
+        output_file = output_dir / f"{project.name}.dawproject"
+        generator.generate_dawproject(str(output_file))
+        logger.info(f"Generated: {output_file}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error processing project: {e}")
+        if logger.level <= logging.DEBUG:
+            logger.exception("Details:")
+        return False
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_file", type=str)
+    parser.add_argument("output_dir", type=str)
+    parser.add_argument("--debug", action="store_true")
+    args = parser.parse_args()
+
+    setup_logging(args.debug)
+    logger = get_logger()
+
+    try:
         input_file = Path(args.input_file).resolve()
         output_dir = Path(args.output_dir).resolve()
         
-        # Log paths in debug mode
-        logger.debug(f"Input file: {input_file}")
-        logger.debug(f"Input file exists: {input_file.exists()}")
-        logger.debug(f"Input file size: {input_file.stat().st_size if input_file.exists() else 'N/A'}")
-        logger.debug(f"Output directory: {output_dir}")
-        
-        # Validate input
         if not input_file.exists():
             logger.error(f"Input file not found: {input_file}")
             return 1
-        
+
         if not input_file.suffix.lower() == '.flp':
-            logger.error(f"Input file must be an FL Studio project (.flp)")
+            logger.error("Input must be .flp file")
             return 1
-        
-        # Create output directory if it doesn't exist
-        output_dir.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Created/verified output directory: {output_dir}")
-        
-        # Process project
-        dawproject_paths = process_project(
-            input_file=input_file,
-            output_dir=output_dir,
-            debug=args.debug
-        )
-        
-        if not dawproject_paths:
-            logger.error("No DAWproject files were generated")
-            return 1
-        
-        logger.info("Processing complete!")
-        logger.info("\nGenerated DAWproject files:")
-        for name, path in dawproject_paths.items():
-            logger.info(f"- {name}: {path}")
             
-        return 0
-        
+        logger.debug(f"Processing {input_file} -> {output_dir}")
+        return 0 if process_project(input_file, output_dir) else 1
+
     except KeyboardInterrupt:
-        logger.info("\nOperation cancelled by user")
+        logger.info("\nCancelled")
         return 130
-        
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        if args.debug:
-            logger.exception("Detailed error information:")
+        logger.error(f"Error: {e}")
+        if logger.level <= logging.DEBUG:
+            logger.exception("Details:")
         return 1
 
 if __name__ == "__main__":
@@ -1321,491 +1024,384 @@ if __name__ == "__main__":
 ```
 ---
 
-#### src\fl2cu\config.py
-```
-# src/fl2cu/config.py
-"""Global configuration settings for FL Studio to Cubase migration"""
-
-from pathlib import Path
-from typing import List
-
-class Config:
-    """Global configuration settings"""
-    
-    # File system settings
-    DEFAULT_OUTPUT_DIR: Path = Path('./output')
-    TEMP_DIR: Path = Path('./temp')
-    
-    # Audio settings
-    SUPPORTED_AUDIO_FORMATS: List[str] = ['.wav']
-    MAX_AUDIO_CHANNELS: int = 2
-    SAMPLE_RATE: int = 44100
-    BIT_DEPTH: int = 24
-    
-    # Project constraints
-    MAX_CLIPS_PER_ARRANGEMENT: int = 1000
-    MAX_ARRANGEMENTS: int = 50
-    
-    # Version requirements
-    MIN_FL_STUDIO_VERSION: str = '20.8.0'
-    MIN_CUBASE_VERSION: str = '14.0.0'
-    
-    # AAF settings
-    AAF_VERSION: str = '1.1'
-    SUPPORTED_COLOR_FORMATS: List[str] = ['RGB', 'HEX']
-    
-    # Performance settings
-    BATCH_SIZE: int = 100  # Number of clips to process at once
-    MAX_PARALLEL_EXPORTS: int = 4
-    
-    def get_output_dir(cls, project_name: str) -> Path:
-        """Get project-specific output directory"""
-        return cls.DEFAULT_OUTPUT_DIR / project_name
-    
-    def get_temp_dir(cls, project_name: str) -> Path:
-        """Get project-specific temporary directory"""
-        return cls.TEMP_DIR / project_name
-```
----
-
-#### src\fl2cu\core\__init__.py
-```
-# src/fl2cu/core/__init__.py
-"""Core functionality for FL Studio to Cubase migration."""
-
-from .project_parser import FLProjectParser
-from .audio_processor import AudioProcessor
-from .dawproject_generator import DAWProjectGenerator
-
-__all__ = ['FLProjectParser', 'AudioProcessor', 'DAWProjectGenerator']
-```
----
-
-#### src\fl2cu\core\audio_processor.py
+#### src\fl2cu\generator\audio_utils.py
 ```
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Any, Optional
 
-from ..models.clip import Clip
+class AudioAnalyzer:
+    """Handles audio file analysis and metadata extraction."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def get_audio_metadata(self, file_path: Path) -> Optional[Dict[str, Any]]:
+        """Get audio file metadata using ffprobe."""
+        if not file_path.exists():
+            self.logger.error(f"Audio file not found: {file_path}")
+            return None
+            
+        try:
+            result = subprocess.run([
+                'ffprobe',
+                '-v', 'quiet',
+                '-print_format', 'json',
+                '-show_format',
+                '-show_streams',
+                str(file_path)
+            ], capture_output=True, text=True, check=True)
+            
+            data = json.loads(result.stdout)
+            
+            # Extract relevant metadata
+            audio_stream = next(
+                (s for s in data.get('streams', []) if s.get('codec_type') == 'audio'),
+                None
+            )
+            
+            if not audio_stream:
+                self.logger.error(f"No audio stream found in {file_path}")
+                return None
+                
+            return {
+                'channels': int(audio_stream.get('channels', 2)),
+                'sample_rate': int(audio_stream.get('sample_rate', 44100)),
+                'duration': float(audio_stream.get('duration', 0.0)),
+                'bit_depth': int(audio_stream.get('bits_per_sample', 16)),
+                'codec': audio_stream.get('codec_name', 'pcm_s16le')
+            }
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"ffprobe failed for {file_path}: {e.stderr}")
+            return None
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse ffprobe output: {e}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Error analyzing audio file {file_path}: {e}")
+            return None
 
 class AudioProcessor:
+    """Handles audio file processing and conversion."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.analyzer = AudioAnalyzer()
 
-    def validate_audio_files(self, clips: List[Clip]) -> Dict[Clip, Path]:
-        """Validate processed audio files."""
-        valid_clips = {}
-        
-        for clip, path in self.process_audio_clips(clips).items():
-            with wave.open(str(path), 'rb') as wav_file:
-                # Verify it's standard PCM format
-                if wav_file.getcomptype() == 'NONE':
-                    valid_clips[clip] = path
-                
-        return valid_clips
+    def process_audio_file(
+        self,
+        source_path: Path,
+        dest_path: Path,
+        target_sample_rate: int = 44100,
+        target_bit_depth: int = 24
+    ) -> bool:
+        """Process audio file ensuring consistent format."""
+        try:
+            # Get source metadata
+            metadata = self.analyzer.get_audio_metadata(source_path)
+            if not metadata:
+                return False
+
+            # Check if conversion is needed
+            if (metadata['sample_rate'] == target_sample_rate and 
+                metadata['bit_depth'] == target_bit_depth):
+                # Just copy file if no conversion needed
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                dest_path.write_bytes(source_path.read_bytes())
+                return True
+
+            # Convert audio
+            result = subprocess.run([
+                'ffmpeg',
+                '-i', str(source_path),
+                '-ar', str(target_sample_rate),
+                '-c:a', f'pcm_s{target_bit_depth}le',
+                '-y',  # Overwrite output file
+                str(dest_path)
+            ], capture_output=True, text=True, check=True)
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Audio processing failed for {source_path}: {e.stderr}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error processing audio file {source_path}: {e}")
+            return False
 ```
 ---
 
-#### src\fl2cu\core\dawproject_generator.py
+#### src\fl2cu\generator\dawproject_generator.py
 ```
 from pathlib import Path
-from typing import Dict, Optional, Any
 from xml.etree import ElementTree as ET
+from typing import Dict, List, Optional
+
+from ..generator.xml_utils import XMLWriter
+
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
+from ..models.timing import ProjectTiming
+from .xml_builder import XMLBuilder
 
 class DAWProjectGenerator:
-    """Generates DAWproject format ZIP containers with XML and audio files."""
-    
-    def __init__(self, arrangement: Arrangement, clip_paths: Dict[Clip, Path]):
-        self.arrangement = arrangement
+    def __init__(self, arrangements: List[Arrangement], clip_paths: Dict[Clip, Path]):
+        self.arrangements = arrangements
         self.clip_paths = clip_paths
         self.logger = logging.getLogger(__name__)
 
-    def _probe_audio(self, path: str) -> Dict[str, Any]:
-        """Get audio file metadata using ffprobe."""
-        cmd = [
-            'ffprobe',
-            '-v', 'quiet',
-            '-of', 'json',
-            '-show_format',
-            '-show_streams',
-            str(path)
-        ]
-        
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            return json.loads(result.stdout)
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"ffprobe failed for {path}: {e.stderr}")
-            raise
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse ffprobe output: {e}")
-            raise
-
-    def _create_project_xml(self) -> ET.Element:
-        """Create the project.xml content."""
-        # Create root Project element
-        root = ET.Element("Project", version="1.0")
-        
-        # Add Application metadata
-        app = ET.SubElement(root, "Application", name="FL Studio Converter", version="1.0")
-        
-        # Create Transport element for tempo/time signature
-        transport = ET.SubElement(root, "Transport")
-        tempo = ET.SubElement(transport, "Tempo", unit="bpm", value="120", min="20", max="999")
-        time_sig = ET.SubElement(transport, "TimeSignature", numerator="4", denominator="4")
-        
-        # Create Structure section
-        structure = ET.SubElement(root, "Structure")
-        
-        # Create audio track
-        track = ET.SubElement(structure, "Track", 
-                            contentType="audio",
-                            loaded="true",
-                            id=f"track-{self.arrangement.name}",
-                            name=self.arrangement.name)
-        
-        # Create channel for the track
-        channel = ET.SubElement(track, "Channel",
-                              audioChannels="2",
-                              role="regular",
-                              solo="false",
-                              id=f"channel-{self.arrangement.name}")
-        
-        # Add standard channel controls
-        ET.SubElement(channel, "Volume", value="1.0", min="0.0", max="2.0", unit="linear")
-        ET.SubElement(channel, "Pan", value="0.5", min="0.0", max="1.0", unit="normalized")
-        ET.SubElement(channel, "Mute", value="false")
-
-        # Create Arrangement section
-        arrangement = ET.SubElement(root, "Arrangement", id="main-arrangement")
-        
-        # Create Lanes section
-        lanes = ET.SubElement(arrangement, "Lanes", timeUnit="beats")
-        
-        # Create track lanes
-        track_lanes = ET.SubElement(lanes, "Lanes", track=f"track-{self.arrangement.name}")
-        
-        # Create clips container
-        clips = ET.SubElement(track_lanes, "Clips")
-
-        # Process each audio clip
-        for clip in self.arrangement.clips:
-            source_path = self.clip_paths.get(clip)
-            if not source_path or not source_path.exists():
-                self.logger.warning(f"Audio file not found for clip: {clip.name}")
-                continue
-
-            try:
-                # Get audio metadata
-                metadata = self._probe_audio(str(source_path))
-                stream = metadata['streams'][0]
-                
-                # Create clip element
-                clip_el = ET.SubElement(clips, "Clip",
-                                      time=str(clip.position),
-                                      duration=str(clip.duration),
-                                      name=clip.name)
-                
-                # Create audio within clip
-                audio = ET.SubElement(clip_el, "Audio",
-                                    channels=str(stream.get('channels', 2)),
-                                    duration=str(stream.get('duration', clip.duration)),
-                                    sampleRate=str(stream.get('sample_rate', 44100)))
-                
-                # Add file reference - use relative path within ZIP
-                audio_rel_path = f"audio/{clip.name}.wav"
-                file_ref = ET.SubElement(audio, "File", path=audio_rel_path)
-                
-                self.logger.debug(f"Added clip {clip.name} at position {clip.position}")
-
-            except Exception as e:
-                self.logger.error(f"Failed to process clip {clip.name}: {str(e)}")
-                raise
-
-        return root
-
-    def _create_metadata_xml(self) -> ET.Element:
-        """Create the metadata.xml content."""
-        root = ET.Element("MetaData")
-        ET.SubElement(root, "Title").text = self.arrangement.name
-        return root
-
     def generate_dawproject(self, output_path: str) -> None:
-        """Generate DAWproject file (ZIP container with XML and audio)."""
-        self.logger.info(f"Creating DAWproject file at {output_path}")
-        
         try:
-            # Create a temporary directory for preparing files
-            temp_dir = Path(output_path).parent / f"temp_{self.arrangement.name}"
+            temp_dir = Path(output_path).parent / "temp_dawproject"
             temp_dir.mkdir(parents=True, exist_ok=True)
             
             try:
-                # Create project.xml
-                project_xml = self._create_project_xml()
-                xml_str = ET.tostring(project_xml, encoding='unicode', method='xml')
-                with open(temp_dir / "project.xml", 'w', encoding='utf-8') as f:
-                    f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-                    f.write(xml_str)
-
-                # Create metadata.xml
-                metadata_xml = self._create_metadata_xml()
-                xml_str = ET.tostring(metadata_xml, encoding='unicode', method='xml')
-                with open(temp_dir / "metadata.xml", 'w', encoding='utf-8') as f:
-                    f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-                    f.write(xml_str)
-
-                # Create audio directory and copy files
-                audio_dir = temp_dir / "audio"
-                audio_dir.mkdir(exist_ok=True)
+                # Generate XML files
+                self._generate_xml_files(temp_dir)
                 
-                for clip, source_path in self.clip_paths.items():
-                    if clip in self.arrangement.clips:
-                        dest_path = audio_dir / f"{clip.name}.wav"
-                        shutil.copy2(source_path, dest_path)
-
-                # Create ZIP file
-                with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                    # Add XML files
-                    zf.write(temp_dir / "project.xml", "project.xml")
-                    zf.write(temp_dir / "metadata.xml", "metadata.xml")
-                    
-                    # Add audio files
-                    for audio_file in audio_dir.glob("*.wav"):
-                        zf.write(audio_file, f"audio/{audio_file.name}")
-
-                self.logger.info("DAWproject file successfully generated")
-
+                # Copy and process audio files
+                self._process_audio_files(temp_dir)
+                
+                # Create final ZIP archive
+                self._create_archive(temp_dir, output_path)
+                
+                self.logger.info(f"Successfully generated DAWproject at {output_path}")
+                
             finally:
-                # Clean up temp directory
-                shutil.rmtree(temp_dir, ignore_errors=True)
-
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                    
         except Exception as e:
-            self.logger.error(f"Failed to generate DAWproject file: {str(e)}")
+            self.logger.error(f"Failed to generate DAWproject: {e}")
             raise
+
+    def _generate_xml_files(self, temp_dir: Path) -> None:
+        # Generate project.xml
+        project_xml = self._create_project_xml()
+        project_path = temp_dir / "project.xml"
+        XMLWriter.write_xml(project_xml, project_path)
+        
+        # Generate metadata.xml
+        metadata_xml = self._create_metadata_xml()
+        metadata_path = temp_dir / "metadata.xml"
+        XMLWriter.write_xml(metadata_xml, metadata_path)
+
+    def _create_project_xml(self) -> ET.Element:
+        root = ET.Element("Project", version="1.0")
+        
+        # Add Application info
+        ET.SubElement(root, "Application", name="FL Studio Converter", version="1.0")
+        
+        # Add Transport section
+        if self.arrangements and hasattr(self.arrangements[0], 'project'):
+            timing = self.arrangements[0].project.timing
+            root.append(XMLBuilder.create_transport_element(timing))
+        
+        # Add Structure section
+        structure = ET.SubElement(root, "Structure")
+        
+        # Add tracks for each arrangement
+        for i, arr in enumerate(self.arrangements):
+            structure.append(XMLBuilder.create_track_element(arr.name, i))
+        
+        # Add Arrangements
+        for i, arr in enumerate(self.arrangements):
+            arr_element = ET.SubElement(root, "Arrangement", id=f"arrangement-{i}")
+            lanes = ET.SubElement(arr_element, "Lanes", timeUnit="beats", id=f"lanes-{i}")
+            track_lanes = ET.SubElement(lanes, "Lanes", track=f"track-{i}", id=f"track-lanes-{i}")
+            clips = ET.SubElement(track_lanes, "Clips", id=f"clips-{i}")
+            
+            for clip in arr.clips:
+                clip_el = XMLBuilder.create_clip_element(clip, self.clip_paths.get(clip))
+                if clip_el is not None:
+                    clips.append(clip_el)
+        
+        return root
+
+    def _create_metadata_xml(self) -> ET.Element:
+        root = ET.Element("MetaData")
+        
+        if self.arrangements:
+            arr = self.arrangements[0]
+            if hasattr(arr, 'project') and arr.project:
+                ET.SubElement(root, "Title").text = arr.project.name
+            else:
+                ET.SubElement(root, "Title").text = arr.name
+                
+        return root
+
+    def _process_audio_files(self, temp_dir: Path) -> None:
+        audio_dir = temp_dir / "audio"
+        audio_dir.mkdir(exist_ok=True)
+        
+        for clip, source_path in self.clip_paths.items():
+            if source_path.exists():
+                dest_path = audio_dir / f"{clip.name}.wav"
+                shutil.copy2(source_path, dest_path)
+            else:
+                self.logger.warning(f"Audio file not found: {source_path}")
+
+    def _create_archive(self, temp_dir: Path, output_path: str) -> None:
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Add XML files
+            zf.write(temp_dir / "project.xml", "project.xml")
+            zf.write(temp_dir / "metadata.xml", "metadata.xml")
+            
+            # Add audio files
+            audio_dir = temp_dir / "audio"
+            for audio_file in audio_dir.glob("*.wav"):
+                zf.write(audio_file, f"audio/{audio_file.name}")
 ```
 ---
 
-#### src\fl2cu\core\project_parser.py
+#### src\fl2cu\generator\xml_builder.py
 ```
 from pathlib import Path
-from typing import List, Optional, Dict, Union
+from xml.etree import ElementTree as ET
+from typing import Dict, List, Optional
 
-from ..models.project import Project
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
+from ..models.timing import ProjectTiming
 
-logger = logging.getLogger(__name__)
-
-class FLProjectParser:
-    def __init__(self, file_path: str):
-        self.file_path = Path(file_path)
-        if not self.file_path.exists():
-            raise FileNotFoundError(f"Project file not found: {file_path}")
-            
-        logger.debug(f"Loading FL Studio project: {file_path}")
-        self.fl_project = pyflp.parse(file_path)
-        logger.debug(f"Project version: {self.fl_project.version}")
-
-    def resolve_fl_studio_path(self, path: Union[str, Path]) -> Optional[Path]:
-        if isinstance(path, Path):
-            path = str(path)
-            
-        fl_variables = {
-            "FLStudioUserData": "C:\\Users\\poznas\\Documents\\Image-Line\\Data\\FL Studio",
-            "FLStudioInstallDir": os.getenv("PROGRAMFILES", "") + "\\Image-Line\\FL Studio 21",
-        }
-        
-        try:
-            for var_name, var_value in fl_variables.items():
-                var_pattern = f"%{var_name}%"
-                if var_pattern in path:
-                    path = path.replace(var_pattern, var_value)
-            resolved_path = Path(path)
-            return resolved_path if resolved_path.exists() else None
-        except Exception as e:
-            logger.error(f"Failed to resolve path {path}: {e}")
-            return None
-
-    def _get_color_hex(self, color) -> str:
-        try:
-            if hasattr(color, 'r') and hasattr(color, 'g') and hasattr(color, 'b'):
-                # Handle RGBA object
-                return f"#{color.r:02x}{color.g:02x}{color.b:02x}"
-            elif isinstance(color, int):
-                # Handle integer color value
-                r = (color >> 16) & 255
-                g = (color >> 8) & 255
-                b = color & 255
-                return f"#{r:02x}{g:02x}{b:02x}"
-            else:
-                logger.warning(f"Unknown color format: {type(color)}. Using default.")
-                return "#FFFFFF"
-        except Exception as e:
-            logger.error(f"Error converting color: {e}")
-            return "#FFFFFF"
-
-    def _create_clip_from_channel(self, channel, position: float) -> Optional[Clip]:
-        try:
-            logger.debug(f"Creating clip from channel at position {position}")
-            
-            # Get channel name and sanitize for unique identification
-            base_name = channel.name if hasattr(channel, 'name') else "unnamed_clip"
-            base_name = base_name.replace(" ", "_")
-            name = f"{base_name}_{position}"
-            logger.debug(f"Channel name: {channel.name}")
-
-            # Get sample path if available
-            source_path = None
-            if hasattr(channel, 'sample_path') and channel.sample_path:
-                source_path = self.resolve_fl_studio_path(str(channel.sample_path))
-                logger.debug(f"Sample path: {source_path}")
-
-            # Calculate position in seconds
-            position_seconds = float(position) / self.fl_project.ppq
-            logger.debug(f"Position in seconds: {position_seconds}")
-
-            # Get duration
-            duration = 1.0
-            if hasattr(channel, 'length'):
-                duration = float(channel.length) / self.fl_project.ppq
-            elif hasattr(channel, 'sample_length'):
-                duration = float(channel.sample_length) / self.fl_project.ppq
-            logger.debug(f"Duration in seconds: {duration}")
-
-            # Get color
-            color = "#FFFFFF"
-            try:
-                if hasattr(channel, 'color'):
-                    color = self._get_color_hex(channel.color)
-            except Exception as e:
-                logger.warning(f"Failed to get channel color: {e}")
-            logger.debug(f"Color: {color}")
-
-            # Get volume and normalize to 0-1 range
-            volume = 1.0
-            try:
-                if hasattr(channel, 'volume'):
-                    raw_volume = float(channel.volume)
-                    volume = raw_volume / 100.0 if raw_volume > 1.0 else raw_volume
-            except Exception as e:
-                logger.warning(f"Failed to get channel volume: {e}")
-            logger.debug(f"Volume: {volume}")
-
-            # Get mute state
-            muted = False
-            if hasattr(channel, 'enabled'):
-                muted = not channel.enabled
-            logger.debug(f"Muted: {muted}")
-
-            clip = Clip(
-                name=name,
-                position=position_seconds,
-                duration=duration,
-                color=color,
-                source_path=source_path,
-                volume=volume,
-                muted=muted
-            )
-            logger.debug(f"Successfully created clip: {clip.name}")
-            return clip
-
-        except Exception as e:
-            logger.error(f"Error creating clip from channel: {e}")
-            return None
-
-    def _process_native_arrangement(self, arr) -> Optional[Arrangement]:
-        try:
-            logger.debug(f"Processing native arrangement: {arr.name}")
-            
-            # Get arrangement name from FL Studio arrangement
-            if not hasattr(arr, 'name') or not arr.name:
-                logger.warning("Arrangement has no name, skipping")
-                return None
-                
-            arrangement = Arrangement(name=arr.name)
-            
-            for track in arr.tracks:
-                for item in track:
-                    if hasattr(item, 'channel'):
-                        logger.debug(f"Found channel item at position {item.position}")
-                        clip = self._create_clip_from_channel(item.channel, item.position)
-                        if clip:
-                            arrangement.add_clip(clip)
-                            logger.debug(f"Added clip {clip.name} to arrangement {arrangement.name}")
-                    elif hasattr(item, 'pattern'):
-                        logger.debug(f"Found pattern item at position {item.position}")
-                        clips = self._create_clips_from_pattern(item.pattern, item.position)
-                        for clip in clips:
-                            arrangement.add_clip(clip)
-                            logger.debug(f"Added pattern clip {clip.name} to arrangement {arrangement.name}")
-
-            logger.debug(f"Finished processing arrangement {arr.name} with {len(arrangement.clips)} clips")
-            return arrangement
-        except Exception as e:
-            logger.error(f"Error processing native arrangement: {e}")
-            return None
-
-    def _extract_from_patterns(self) -> List[Arrangement]:
-        arrangements = []
-        try:
-            logger.debug("Extracting from patterns")
-            for pattern in self.fl_project.patterns:
-                if not pattern.name:
-                    continue
-                    
-                logger.debug(f"Processing pattern: {pattern.name}")
-                arrangement = Arrangement(name=pattern.name)
-                
-                clips = self._create_clips_from_pattern(pattern)
-                if clips:
-                    for clip in clips:
-                        arrangement.add_clip(clip)
-                    arrangements.append(arrangement)
-                    logger.debug(f"Added arrangement from pattern {pattern.name} with {len(clips)} clips")
-                    
-        except Exception as e:
-            logger.error(f"Error extracting from patterns: {e}")
-            
-        return arrangements
-
-    def extract_arrangements(self) -> List[Arrangement]:
-        arrangements = []
-        
-        logger.debug("Checking for FL Studio 12.9.1+ arrangements")
-        if hasattr(self.fl_project, 'arrangements'):
-            logger.debug(f"Found {len(self.fl_project.arrangements)} native arrangements")
-            for arr in self.fl_project.arrangements:
-                arrangement = self._process_native_arrangement(arr)
-                if arrangement and arrangement.clips:
-                    arrangements.append(arrangement)
-                    logger.debug(f"Added arrangement {arrangement.name} with {len(arrangement.clips)} clips")
-
-        # Fall back to patterns if no arrangements found
-        if not arrangements:
-            logger.debug("Falling back to pattern-based arrangements")
-            pattern_arrangements = self._extract_from_patterns()
-            arrangements.extend(pattern_arrangements)
-
-        logger.info(f"Total arrangements extracted: {len(arrangements)}")
-        for arr in arrangements:
-            logger.debug(f"Arrangement '{arr.name}' has {len(arr.clips)} clips")
-        return arrangements
-
-    def parse_project(self) -> Project:
-        project = Project(
-            name=self.file_path.stem,
-            source_path=self.file_path
+class XMLBuilder:
+    def create_transport_element(timing: ProjectTiming) -> ET.Element:
+        transport = ET.Element("Transport")
+        ET.SubElement(transport, "Tempo",
+            unit="bpm",
+            value=str(timing.tempo),
+            min="20",
+            max="999",
+            id="tempo"
         )
+        ET.SubElement(transport, "TimeSignature",
+            numerator=str(timing.time_signature_numerator),
+            denominator=str(timing.time_signature_denominator),
+            id="timesig"
+        )
+        return transport
 
+    def create_track_element(name: str, index: int) -> ET.Element:
+        track = ET.Element("Track",
+            contentType="audio",
+            loaded="true",
+            id=f"track-{index}",
+            name=name,
+            color="#a2eabf"
+        )
+        
+        # Add Channel
+        channel = ET.SubElement(track, "Channel",
+            audioChannels="2",
+            role="regular",
+            solo="false",
+            id=f"channel-{index}"
+        )
+        
+        # Add default channel controls
+        ET.SubElement(channel, "Volume", value="1.0", min="0.0", max="2.0", unit="linear")
+        ET.SubElement(channel, "Pan", value="0.5", min="0.0", max="1.0", unit="normalized")
+        ET.SubElement(channel, "Mute", value="false")
+        
+        return track
+
+    def create_clip_element(clip: Clip, clip_path: Path) -> Optional[ET.Element]:
+        if not clip_path.exists():
+            return None
+            
+        clip_el = ET.Element("Clip",
+            time=str(clip.position),
+            duration=str(clip.duration),
+            name=clip.name
+        )
+        
+        if clip.volume != 1.0:
+            clip_el.set("level", str(clip.volume))
+        if clip.muted:
+            clip_el.set("enable", "false")
+        
+        warps = ET.SubElement(clip_el, "Warps",
+            contentTimeUnit="seconds",
+            timeUnit="beats"
+        )
+        
+        audio = ET.SubElement(warps, "Audio",
+            channels="2",
+            duration=str(clip.duration),
+            sampleRate="44100",
+            algorithm="stretch"
+        )
+        
+        ET.SubElement(audio, "File",
+            path=f"audio/{clip.name}.wav"
+        )
+        
+        # Add warp points for time stretching
+        ET.SubElement(warps, "Warp", time="0.0", contentTime="0.0")
+        ET.SubElement(warps, "Warp", time=str(clip.duration), contentTime=str(clip.duration))
+        
+        return clip_el
+```
+---
+
+#### src\fl2cu\generator\xml_utils.py
+```
+from xml.etree import ElementTree as ET
+from typing import Optional
+from pathlib import Path
+
+class XMLFormatter:
+    """Handles XML formatting and pretty printing."""
+    
+    def format_xml(elem: ET.Element, level: int = 0, indent: str = "  ") -> None:
+        """Format XML element with proper indentation."""
+        i = "\n" + level * indent
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + indent
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+            for subelem in elem:
+                XMLFormatter.format_xml(subelem, level + 1, indent)
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = i
+
+class XMLWriter:
+    """Handles XML file writing with proper formatting."""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def write_xml(
+        self,
+        element: ET.Element,
+        output_path: Path,
+        encoding: str = 'UTF-8',
+        xml_declaration: bool = True
+    ) -> bool:
+        """Write formatted XML to file."""
         try:
-            arrangements = self.extract_arrangements()
-            for arr in arrangements:
-                project.add_arrangement(arr)
+            # Format the XML
+            XMLFormatter.format_xml(element)
+            
+            # Convert to string
+            xml_str = ET.tostring(element, encoding='unicode')
+            
+            # Write to file
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, 'w', encoding=encoding) as f:
+                if xml_declaration:
+                    f.write(f'<?xml version="1.0" encoding="{encoding}"?>\n')
+                f.write(xml_str)
+                
+            return True
+            
         except Exception as e:
-            logger.error(f"Failed to extract arrangements: {e}")
-            raise
-
-        return project
+            self.logger.error(f"Failed to write XML to {output_path}: {e}")
+            return False
 ```
 ---
 
@@ -1913,26 +1509,117 @@ class Arrangement:
 
 #### src\fl2cu\models\base.py
 ```
+# src/fl2cu/models/base.py
+from typing import List, Optional, Dict, Any, Set
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-
 from .arrangement import Arrangement
+from .timing import ProjectTiming
 
 class BaseProject:
     """Base class containing core Project functionality."""
     def __init__(
         self,
         name: str,
+        timing: Optional[ProjectTiming] = None,
         source_path: Optional[Path] = None,
         output_dir: Optional[Path] = None
     ):
         self.name = name
+        self.timing = timing or ProjectTiming.default()
         self.source_path = Path(source_path) if source_path else None
         self.output_dir = Path(output_dir) if output_dir else None
         self._arrangements: List['Arrangement'] = []
 
     def arrangements(self) -> List['Arrangement']:
+        """Get list of project arrangements."""
         return self._arrangements.copy()
+
+    def add_arrangement(self, arrangement: 'Arrangement') -> None:
+        """Add an arrangement to the project.
+        
+        Args:
+            arrangement: Arrangement to add
+            
+        Raises:
+            ValueError: If arrangement with same name already exists
+        """
+        if arrangement.name in [arr.name for arr in self._arrangements]:
+            raise ValueError(f"Arrangement {arrangement.name} already exists")
+        self._arrangements.append(arrangement)
+
+    def remove_arrangement(self, arrangement: 'Arrangement') -> None:
+        """Remove an arrangement from the project.
+        
+        Args:
+            arrangement: Arrangement to remove
+        """
+        if arrangement in self._arrangements:
+            self._arrangements.remove(arrangement)
+
+    def validate(self) -> None:
+        """Validate project integrity.
+        
+        Raises:
+            ValueError: If validation fails
+        """
+        if not self.name:
+            raise ValueError("Project name cannot be empty")
+            
+        if self.source_path and not isinstance(self.source_path, Path):
+            raise TypeError("source_path must be a Path object")
+            
+        if self.output_dir and not isinstance(self.output_dir, Path):
+            raise TypeError("output_dir must be a Path object")
+
+        # Validate timing
+        if not isinstance(self.timing, ProjectTiming):
+            raise TypeError("timing must be a ProjectTiming object")
+        if self.timing.tempo <= 0:
+            raise ValueError("Project tempo must be positive")
+            
+        # Check for arrangement name uniqueness
+        names = [arr.name for arr in self._arrangements]
+        duplicate_names = set(name for name in names if names.count(name) > 1)
+        if duplicate_names:
+            raise ValueError(f"Duplicate arrangement names found: {', '.join(duplicate_names)}")
+
+    def get_all_clip_paths(self) -> Set[Path]:  # Changed from set[Path] to Set[Path]
+        """Get set of all unique audio file paths used in project."""
+        paths = set()
+        for arrangement in self._arrangements:
+            for clip in arrangement.clips:
+                if clip.source_path:
+                    paths.add(clip.source_path)
+        return paths
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert project to dictionary format."""
+        return {
+            'name': self.name,
+            'timing': self.timing.to_dict(),
+            'source_path': str(self.source_path) if self.source_path else None,
+            'output_dir': str(self.output_dir) if self.output_dir else None,
+            'arrangements': [arr.to_dict() for arr in self._arrangements]
+        }
+
+    def from_dict(cls, data: Dict[str, Any]) -> 'BaseProject':
+        """Create project instance from dictionary data."""
+        timing_data = data.get('timing', {})
+        timing = ProjectTiming(
+            tempo=float(timing_data.get('tempo', {}).get('value', 120.0)),
+            time_signature_numerator=int(timing_data.get('time_signature', {}).get('numerator', 4)),
+            time_signature_denominator=int(timing_data.get('time_signature', {}).get('denominator', 4))
+        )
+        
+        source_path = Path(data['source_path']) if data.get('source_path') else None
+        output_dir = Path(data['output_dir']) if data.get('output_dir') else None
+        
+        return cls(
+            name=data['name'],
+            timing=timing,
+            source_path=source_path,
+            output_dir=output_dir
+        )
 ```
 ---
 
@@ -2167,81 +1854,338 @@ class Project(BaseProject):
 ```
 ---
 
+#### src\fl2cu\models\timing.py
+```
+from dataclasses import dataclass
+from typing import Optional
+
+class ProjectTiming:
+    """Represents project timing information."""
+    tempo: float
+    time_signature_numerator: int
+    time_signature_denominator: int
+    ppq: Optional[int] = None  # Pulses Per Quarter note
+
+    def default() -> 'ProjectTiming':
+        """Create default timing with 120 BPM and 4/4 time signature."""
+        return ProjectTiming(
+            tempo=120.0,
+            time_signature_numerator=4,
+            time_signature_denominator=4
+        )
+
+    def to_dict(self) -> dict:
+        """Convert timing info to dictionary format."""
+        return {
+            'tempo': {
+                'value': str(self.tempo),
+                'min': '20',
+                'max': '999',
+                'unit': 'bpm'
+            },
+            'time_signature': {
+                'numerator': str(self.time_signature_numerator),
+                'denominator': str(self.time_signature_denominator)
+            }
+        }
+```
+---
+
+#### src\fl2cu\parser\arrangement_parser.py
+```
+from typing import List, Optional
+
+from ..models.arrangement import Arrangement
+from .clip_parser import FLClipParser
+
+class FLArrangementParser:
+    """Handles parsing of FL Studio arrangements."""
+    
+    def __init__(self, fl_project: 'pyflp.Project', clip_parser: FLClipParser):
+        self.fl_project = fl_project
+        self.clip_parser = clip_parser
+        self.logger = logging.getLogger(__name__)
+
+    def parse_arrangements(self) -> List[Arrangement]:
+        """Extract all arrangements from FL Studio project."""
+        arrangements = []
+        
+        # Try FL Studio 12.9+ arrangements first
+        if hasattr(self.fl_project, 'arrangements'):
+            arrangements.extend(self._parse_native_arrangements())
+        
+        # Fall back to playlist if no arrangements found
+        if not arrangements and hasattr(self.fl_project, 'playlist'):
+            arrangement = self._parse_playlist_as_arrangement()
+            if arrangement and arrangement.clips:
+                arrangements.append(arrangement)
+        
+        return arrangements
+
+    def _parse_native_arrangements(self) -> List[Arrangement]:
+        arrangements = []
+        for arr in self.fl_project.arrangements:
+            if not arr.name:
+                continue
+            
+            arrangement = Arrangement(name=arr.name)
+            self._process_tracks(arrangement, arr.tracks)
+            
+            if arrangement.clips:
+                arrangements.append(arrangement)
+                
+        return arrangements
+
+    def _parse_playlist_as_arrangement(self) -> Optional[Arrangement]:
+        arrangement = Arrangement(name=self.fl_project.name)
+        
+        for item in self.fl_project.playlist:
+            if hasattr(item, 'channel'):
+                clip = self.clip_parser.create_clip(item.channel, item.position)
+                if clip:
+                    arrangement.add_clip(clip)
+                    
+        return arrangement if arrangement.clips else None
+
+    def _process_tracks(self, arrangement: Arrangement, tracks):
+        for track in tracks:
+            for item in track:
+                if hasattr(item, 'channel'):
+                    clip = self.clip_parser.create_clip(item.channel, item.position)
+                    if clip:
+                        arrangement.add_clip(clip)
+```
+---
+
+#### src\fl2cu\parser\clip_parser.py
+```
+from pathlib import Path
+from typing import Optional
+from ..models.clip import Clip
+
+class FLClipParser:
+    """Handles parsing of audio clips from FL Studio channels."""
+    
+    def __init__(self, fl_project: 'pyflp.Project'):
+        self.fl_project = fl_project
+        self.ppq = getattr(fl_project, 'ppq', 96)
+        self.logger = logging.getLogger(__name__)
+
+    def create_clip(self, channel, position: float) -> Optional[Clip]:
+        """Create clip from FL Studio channel."""
+        if not hasattr(channel, 'sample_path'):
+            return None
+
+        try:
+            source_path = Path(channel.sample_path)
+            if not source_path.exists():
+                self.logger.warning(f"Sample not found: {source_path}")
+                return None
+
+            name = getattr(channel, 'name', '') or source_path.stem
+            position_seconds = float(position) / self.ppq
+            duration = float(getattr(channel, 'sample_length', self.ppq)) / self.ppq
+            
+            # Get channel color
+            color = self._get_color(channel)
+            
+            # Get volume normalized to 0-1
+            volume = self._get_volume(channel)
+
+            clip = Clip(
+                name=f"{name}_{position}",
+                position=position_seconds,
+                duration=duration,
+                color=color,
+                source_path=source_path,
+                volume=volume,
+                muted=not bool(getattr(channel, 'enabled', True))
+            )
+            
+            self.logger.debug(f"Created clip {clip.name} at {position_seconds}s")
+            return clip
+
+        except Exception as e:
+            self.logger.error(f"Failed to create clip: {e}")
+            return None
+
+    def _get_color(self, channel) -> str:
+        try:
+            if hasattr(channel, 'color'):
+                color = channel.color
+                if hasattr(color, 'r'):
+                    return f"#{color.r:02x}{color.g:02x}{color.b:02x}"
+                elif isinstance(color, int):
+                    r = (color >> 16) & 255
+                    g = (color >> 8) & 255
+                    b = color & 255
+                    return f"#{r:02x}{g:02x}{b:02x}"
+        except Exception as e:
+            self.logger.warning(f"Failed to get color: {e}")
+        return "#FFFFFF"
+
+    def _get_volume(self, channel) -> float:
+        try:
+            if hasattr(channel, 'volume'):
+                raw_volume = float(channel.volume)
+                return raw_volume / 100.0 if raw_volume > 1.0 else raw_volume
+        except Exception as e:
+            self.logger.warning(f"Failed to get volume: {e}")
+        return 1.0
+```
+---
+
+#### src\fl2cu\parser\pattern_parser.py
+```
+from typing import List, Optional
+from ..models.clip import Clip
+from .clip_parser import FLClipParser
+
+class FLPatternParser:
+    """Handles parsing of patterns from FL Studio projects."""
+    
+    def __init__(self, fl_project: 'pyflp.Project', clip_parser: FLClipParser):
+        self.fl_project = fl_project
+        self.clip_parser = clip_parser
+        self.logger = logging.getLogger(__name__)
+
+    def create_clips_from_pattern(self, pattern, base_position: float = 0) -> List[Clip]:
+        """Create clips from an FL Studio pattern."""
+        clips = []
+        
+        try:
+            if not pattern.name:
+                return clips
+
+            self.logger.debug(f"Processing pattern: {pattern.name}")
+            
+            for channel_id, channel in enumerate(pattern.channels):
+                if not channel or not hasattr(channel, 'sample_path'):
+                    continue
+                    
+                position = base_position + (pattern.position if hasattr(pattern, 'position') else 0)
+                
+                clip = self.clip_parser.create_clip_from_channel(
+                    channel=channel,
+                    position=position,
+                    ppq=self.fl_project.ppq
+                )
+                
+                if clip:
+                    clips.append(clip)
+                    self.logger.debug(f"Added clip {clip.name} from pattern {pattern.name}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to create clips from pattern: {e}")
+            
+        return clips
+```
+---
+
+#### src\fl2cu\parser\project_parser.py
+```
+from pathlib import Path
+from .timing_parser import FLTimingParser
+from .clip_parser import FLClipParser
+from .arrangement_parser import FLArrangementParser
+from ..models.project import Project
+
+class FLProjectParser:
+    """Main FL Studio project parser coordinating specialized parsers."""
+    
+    def __init__(self, file_path: str):
+        self.file_path = Path(file_path)
+        if not self.file_path.exists():
+            raise FileNotFoundError(f"Project file not found: {file_path}")
+            
+        self.logger = logging.getLogger(__name__)
+        self.fl_project = pyflp.parse(file_path)
+        
+        # Initialize specialized parsers
+        self.timing_parser = FLTimingParser(self.fl_project)
+        self.clip_parser = FLClipParser(self.fl_project)
+        self.arrangement_parser = FLArrangementParser(self.fl_project, self.clip_parser)
+
+    def parse_project(self) -> Project:
+        """Parse FL Studio project using specialized parsers."""
+        try:
+            # Parse timing info
+            timing = self.timing_parser.parse_timing()
+            
+            # Create project
+            project = Project(
+                name=self.file_path.stem,
+                timing=timing,
+                source_path=self.file_path
+            )
+            
+            # Parse arrangements
+            arrangements = self.arrangement_parser.parse_arrangements()
+            for arrangement in arrangements:
+                project.add_arrangement(arrangement)
+            
+            self.logger.info(f"Parsed project with {len(arrangements)} arrangements")
+            return project
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse project: {e}")
+            raise
+```
+---
+
+#### src\fl2cu\parser\timing_parser.py
+```
+from pathlib import Path
+from typing import Optional
+from pyflp.project import Project as FLProject
+from ..models.timing import ProjectTiming
+
+class FLTimingParser:
+    """Handles extraction of timing information from FL Studio projects."""
+    
+    def __init__(self, fl_project: FLProject):
+        self.fl_project = fl_project
+        self.logger = logging.getLogger(__name__)
+
+    def parse_timing(self) -> ProjectTiming:
+        """Extract timing information from FL Studio project."""
+        try:
+            # Get tempo from project (FLPs store this directly)
+            tempo = float(self.fl_project.tempo)
+            
+            # Get time signature
+            # FL Studio stores numerator and denominator separately
+            time_sig_num = getattr(self.fl_project, 'time_signature_numerator', 4)
+            time_sig_denom = getattr(self.fl_project, 'time_signature_denominator', 4)
+            
+            # Get PPQ (Pulses Per Quarter note)
+            ppq = self.fl_project.ppq
+            
+            timing = ProjectTiming(
+                tempo=tempo,
+                time_signature_numerator=time_sig_num,
+                time_signature_denominator=time_sig_denom,
+                ppq=ppq
+            )
+            
+            self.logger.debug(
+                f"Parsed timing: {tempo} BPM, {time_sig_num}/{time_sig_denom}, PPQ: {ppq}"
+            )
+            return timing
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse timing info: {e}")
+            return ProjectTiming.default()
+```
+---
+
 #### src\fl2cu\utils\__init__.py
 ```
 # fl2cu/utils/__init__.py
 """Utility functions and helpers."""
-from fl2cu.utils.file_manager import FileManager
 from fl2cu.utils.logger import setup_logger, get_logger
 
-__all__ = ['FileManager', 'setup_logger', 'get_logger']
-```
----
-
-#### src\fl2cu\utils\file_manager.py
-```
-# src/fl2cu/utils/file_manager.py
-
-from pathlib import Path
-from typing import Dict, Union
-
-from ..models.project import Project
-from ..models.arrangement import Arrangement
-from .logger import get_logger
-
-class FileManager:
-    """Manages file system operations for the project."""
-    
-    def __init__(self, output_dir: Union[str, Path]) -> None:
-        self.base_dir = Path(output_dir)
-        self.logger = get_logger()
-
-    def _sanitize_path(self, name: str) -> str:
-        # Replace invalid characters with underscores
-        invalid_chars = '<>:"/\\|?*'
-        sanitized = ''.join('_' if c in invalid_chars else c for c in name)
-        return sanitized.strip()
-
-    def create_directory_structure(self, project: Project) -> Dict[Arrangement, Path]:
-        arrangement_dirs = {}
-        
-        try:
-            # Create base project directory
-            project_dir = self.base_dir / self._sanitize_path(project.name)
-            project_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Create directories for each arrangement
-            for arrangement in project.arrangements:
-                arr_dir = project_dir / self._sanitize_path(arrangement.name)
-                arr_dir.mkdir(exist_ok=True)
-                
-                # Create audio files directory
-                audio_dir = arr_dir / "audio_files"
-                audio_dir.mkdir(exist_ok=True)
-                
-                arrangement_dirs[arrangement] = arr_dir
-                
-            self.logger.info(f"Created directory structure in {self.base_dir}")
-            return arrangement_dirs
-            
-        except Exception as e:
-            self.logger.error(f"Failed to create directory structure: {e}")
-            raise OSError(f"Failed to create directory structure: {e}")
-
-    def cleanup_temp_files(self, temp_dir: Union[str, Path]) -> None:
-        try:
-            shutil.rmtree(temp_dir)
-            self.logger.info(f"Cleaned up temporary files in {temp_dir}")
-        except Exception as e:
-            self.logger.warning(f"Failed to clean up temporary files: {e}")
-
-    def validate_paths(self) -> bool:
-        try:
-            self.base_dir.mkdir(parents=True, exist_ok=True)
-            return self.base_dir.exists() and self.base_dir.is_dir()
-        except Exception as e:
-            self.logger.error(f"Path validation failed: {e}")
-            return False
+__all__ = ['setup_logger', 'get_logger']
 ```
 ---
 
@@ -2252,14 +2196,6 @@ from pathlib import Path
 from typing import Optional
 
 def setup_logger(log_file: Optional[Path] = None) -> logging.Logger:
-    """Set up and configure logger.
-    
-    Args:
-        log_file: Optional path to log file. If None, logs to console only.
-    
-    Returns:
-        Configured logger instance
-    """
     logger = logging.getLogger('fl2cu')
     
     if not logger.handlers:  # Only add handlers if none exist
@@ -2290,20 +2226,9 @@ def setup_logger(log_file: Optional[Path] = None) -> logging.Logger:
     return logger
 
 def get_logger() -> logging.Logger:
-    """Get the configured logger instance.
-    
-    Returns:
-        Logger instance
-    """
     return logging.getLogger('fl2cu')
 
 def log_error(error: Exception, context: Optional[str] = None) -> None:
-    """Log an error with optional context information.
-    
-    Args:
-        error: Exception to log
-        context: Optional context information
-    """
     logger = get_logger()
     error_message = f"{error.__class__.__name__}: {str(error)}"
     if context:

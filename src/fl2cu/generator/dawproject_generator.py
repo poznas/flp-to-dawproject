@@ -5,7 +5,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 from typing import Dict, List, Optional
 
-from generator.xml_utils import XMLWriter
+from ..generator.xml_utils import XMLWriter
 
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
@@ -37,7 +37,9 @@ class DAWProjectGenerator:
                 
             finally:
                 if temp_dir.exists():
-                    shutil.rmtree(temp_dir)
+                    # keeping existing temp-dir for debugging
+                    pass
+                    # shutil.rmtree(temp_dir)
                     
         except Exception as e:
             self.logger.error(f"Failed to generate DAWproject: {e}")

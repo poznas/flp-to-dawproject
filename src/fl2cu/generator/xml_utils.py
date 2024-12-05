@@ -3,8 +3,8 @@ from typing import Optional
 import logging
 from pathlib import Path
 
-class XMLFormatter:
-    """Handles XML formatting and pretty printing."""
+class XMLWriter:
+    """Handles XML file writing with proper formatting."""
     
     @staticmethod
     def format_xml(elem: ET.Element, level: int = 0, indent: str = "  ") -> None:
@@ -16,33 +16,28 @@ class XMLFormatter:
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
             for subelem in elem:
-                XMLFormatter.format_xml(subelem, level + 1, indent)
+                XMLWriter.format_xml(subelem, level + 1, indent)
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
         else:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = i
 
-class XMLWriter:
-    """Handles XML file writing with proper formatting."""
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-
+    @staticmethod
     def write_xml(
-        self,
-        element: ET.Element,
+        root: ET.Element,
         output_path: Path,
         encoding: str = 'UTF-8',
         xml_declaration: bool = True
     ) -> bool:
         """Write formatted XML to file."""
+        logger = logging.getLogger(__name__)
         try:
             # Format the XML
-            XMLFormatter.format_xml(element)
+            XMLWriter.format_xml(root)
             
             # Convert to string
-            xml_str = ET.tostring(element, encoding='unicode')
+            xml_str = ET.tostring(root, encoding='unicode')
             
             # Write to file
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -51,8 +46,9 @@ class XMLWriter:
                     f.write(f'<?xml version="1.0" encoding="{encoding}"?>\n')
                 f.write(xml_str)
                 
+            logger.debug(f"Successfully wrote XML to {output_path}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to write XML to {output_path}: {e}")
+            logger.error(f"Failed to write XML to {output_path}: {e}")
             return False

@@ -9,7 +9,7 @@ excluded_extensions = {
     
     # Document and binary files
     '.rtf', '.pdf', '.bin', '.lock',               
-    '.jar', '.bat', '.json', '.xml', '.kts',       
+    '.jar', '.bat', '.json', '.xml', '.kts', '.xsd', '.bat', '.dawproject'     
     
     # Python files
     '.pyc', '.pyo', '.pyd',                        

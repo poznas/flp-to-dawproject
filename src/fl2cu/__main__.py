@@ -12,7 +12,7 @@ def setup_logging(debug: bool) -> None:
     level = logging.DEBUG if debug else logging.INFO
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
-    setup_logger(level=level, log_file=log_dir / "fl2cu.log")
+    setup_logger()
 
 def process_project(input_file: Path, output_dir: Path) -> bool:
     logger = get_logger()
@@ -26,9 +26,13 @@ def process_project(input_file: Path, output_dir: Path) -> bool:
             return False
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        clip_paths = {clip: clip.source_path 
-                     for arr in project.arrangements 
-                     for clip in arr.clips}
+        
+        # Fixed: Access arrangements as a property and iterate over clips properly
+        clip_paths = {
+            clip: clip.source_path 
+            for arrangement in project.arrangements
+            for clip in arrangement.clips
+        }
         
         generator = DAWProjectGenerator(
             arrangements=project.arrangements,

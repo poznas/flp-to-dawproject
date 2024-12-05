@@ -5,14 +5,6 @@ from pathlib import Path
 from typing import Optional
 
 def setup_logger(log_file: Optional[Path] = None) -> logging.Logger:
-    """Set up and configure logger.
-    
-    Args:
-        log_file: Optional path to log file. If None, logs to console only.
-    
-    Returns:
-        Configured logger instance
-    """
     logger = logging.getLogger('fl2cu')
     
     if not logger.handlers:  # Only add handlers if none exist
@@ -43,20 +35,9 @@ def setup_logger(log_file: Optional[Path] = None) -> logging.Logger:
     return logger
 
 def get_logger() -> logging.Logger:
-    """Get the configured logger instance.
-    
-    Returns:
-        Logger instance
-    """
     return logging.getLogger('fl2cu')
 
 def log_error(error: Exception, context: Optional[str] = None) -> None:
-    """Log an error with optional context information.
-    
-    Args:
-        error: Exception to log
-        context: Optional context information
-    """
     logger = get_logger()
     error_message = f"{error.__class__.__name__}: {str(error)}"
     if context:
