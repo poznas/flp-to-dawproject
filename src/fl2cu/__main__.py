@@ -1,10 +1,10 @@
 # src/fl2cu/main.py
+from pathlib import Path
 import argparse
 import logging
 import sys
-from pathlib import Path
 
-from .parser.project_parser import FLProjectParser
+from .parser.project_parser import FLProjectParser 
 from .generator.dawproject_generator import DAWProjectGenerator
 from .utils.logger import setup_logger, get_logger
 
@@ -19,29 +19,35 @@ def process_project(input_file: Path, output_dir: Path) -> bool:
     
     try:
         parser = FLProjectParser(str(input_file))
-        project = parser.parse_project()
+        projects = parser.parse_project()  # Returns list of projects
         
-        if not project.arrangements:
+        if not projects:
             logger.error("No arrangements found in project")
             return False
 
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Fixed: Access arrangements as a property and iterate over clips properly
-        clip_paths = {
-            clip: clip.source_path 
-            for arrangement in project.arrangements
-            for clip in arrangement.clips
-        }
-        
-        generator = DAWProjectGenerator(
-            arrangements=project.arrangements,
-            clip_paths=clip_paths
-        )
+        # Process each project (one per arrangement)
+        for project in projects:
+            if not project.arrangements:
+                continue
+                
+            # Fixed: Get clips from tracks in arrangements
+            clip_paths = {}
+            for arrangement in project.arrangements:
+                for track in arrangement.get_tracks():
+                    for clip in track.clips:
+                        clip_paths[clip] = clip.source_path
+            
+            generator = DAWProjectGenerator(
+                arrangements=project.arrangements,
+                clip_paths=clip_paths
+            )
 
-        output_file = output_dir / f"{project.name}.dawproject"
-        generator.generate_dawproject(str(output_file))
-        logger.info(f"Generated: {output_file}")
+            output_file = output_dir / f"{project.name}.dawproject"
+            generator.generate_dawproject(str(output_file))
+            logger.info(f"Generated: {output_file}")
+        
         return True
 
     except Exception as e:

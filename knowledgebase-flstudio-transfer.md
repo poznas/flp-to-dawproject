@@ -217,7 +217,7 @@ excluded_extensions = {
     
     # Document and binary files
     '.rtf', '.pdf', '.bin', '.lock',               
-    '.jar', '.bat', '.json', '.xml', '.kts', '.xsd', '.bat'      
+    '.jar', '.bat', '.json', '.xml', '.kts', '.xsd', '.bat', '.dawproject'     
     
     # Python files
     '.pyc', '.pyo', '.pyd',                        
@@ -258,6 +258,7 @@ excluded_directories = [
     '/lib/python',      # Python library files
     '/Scripts/',        # Python scripts directory
     '/Include/',        # Python include directory
+    '/knowledgebase/'
 ]
 
 # Excluded specific filenames
@@ -478,195 +479,6 @@ types-lxml>=4.9.0     # Type stubs for lxml
 sphinx>=7.1.0         # Documentation generation
 sphinx-rtd-theme>=2.0.0  # Documentation theme
 ```
----
-
-#### knowledgebase\dawproject\dawproject-README.md
-# DAWproject
-
-Open exchange format for user data between Digital Audio Workstations (DAWs)
-
-## Motivation
-
-The DAWproject format provides a (vendor-agnostic) way of transferring user data between different music applications (DAWs).
-
-Currently, there is no file-format which is purpose-built for this task.
-Standard MIDI files can represent note data, but it is often a lower-level representation (no ramps) of data than what the DAW uses internally, which forces consolidation on export. AAF only covers audio and doesn't have any concept of musical-time, which limits it to post-audio workflows . Most plug-ins do allow you to save presets to a shared location, but this has to be done for each instance. What most users end up doing is just exporting audio as stems.
-
-The aim of this project is to export all translatable project data (audio/note/automation/plug-in) along with the structure surrounding it into a single DAWproject file.
-
-The table below aims to explain the scope format from a music-production perspective and how it compares to other methods of data transfer.
-
-|                                 |                                                               DAWproject                                                               |                      Standard MIDI Files                      |                    Advanced Authoring Format (AAF)                    |
-|---------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------:|:-------------------------------------------------------------:|:---------------------------------------------------------------------:|
-| Intended Use                    |                                                            Music Production                                                            |                        MIDI Sequencing                        |                         Video Post-Production                         |
-| Time Format<br/>(seconds/beats) |                                                   Beats and seconds can be combined                                                    |                             Beats                             |                                Seconds                                |
-| Audio                           |                  Audio<br/>Events/Clips<br/>Fades<br/>Crossfades<br/>Amplitude<br/>Pan<br/>Time Warping<br/>Transpose                  |                               -                               | Audio<br/>Events/Clips<br/>Fades<br/>Crossfades<br/>Amplitude<br/>Pan |
-| Notes                           |                                                       Notes<br/>Note Expressions                                                       |                             Notes                             |                                   -                                   |
-| Automation                      | Tempo<br/>Time Signature<br/>MIDI Messages<br/>Volume<br/>Pan<br/>Mute<br/>Sends<br/>Plug-in Parameters<br/>Built-in Device Parameters | Tempo<br/>Time Signature<br/>MIDI Messages<br/>SysEx Messages |              Volume<br/>Pan<br/>Video Related Parameters              |
-| Plug-ins                        |                                       Stores full plug-in state<br/>and automation of parameters                                       |                               -                               |                                   -                                   |
-| Built-in Devices                |                                 Generic EQ<br/>Generic Compressor<br/>Generic Gate<br/>Generic Limiter                                 |                               -                               |                                   -                                   |
-| Clip Launcher                   |                                                            Clips<br/>Scenes                                                            |                               -                               |                                   -                                   |
-
-## Status
-
-The format is version 1.0 and is stable. 
-
-## Goals
-
-* Package all user data of a project/song into a single file.
-  * Audio timeline data
-  * Note timeline data
-  * Note expression data
-  * Automation timeline data
-  * Audio data (embedded or referenced)
-  * Plug-in states (always embedded)
-* The format should be able to preserve as much user created data as feasible.
-* The format should be able to express the track and timeline structures of the exporting DAW as is, leaving it up to the importer to use this data and flatten it as needed.
-* Simple to implement
-* Built upon established open standards
-* Language agnostic, no special dependencies
-* Open & free
-
-## Non-goals
-
-* Being the native file-format for a DAW
-* Optimal performance (like a binary format could provide)
-* Storing low-level MIDI events directly (but rather relying on higher level abstractions)
-* Storing non-session data (view settings, preferences) 
-
-## Format Specification
-
-* File Extension: .dawproject
-* Container: ZIP
-* Format: XML (project.xml, metadata.xml)
-* Text encoding: UTF-8
-* The exporting DAW is free to choose the directory structure it wants for media and plug-in files.
-
-* [DAWproject XML Reference](https://htmlpreview.github.io/?https://github.com/bitwig/dawproject/blob/main/Reference.html)
-* [Project XML Schema](Project.xsd)
-* [MetaData XML Schema](MetaData.xsd)
-
-## Language Support
-
-DAWproject is based on plain XML/ZIP and can be used with any programming language that can parse those.
-
-The DOM of DAWproject is defined by a set of Java classes which have XML-related annotations and HTML-induced Javadoc comments.
-Those are used (via reflection) to generate XML Documentation and Schemas. Potentially, the same approach could be used to generate code for other languages (contributions welcome).
-
-## Building the Library, Documentation and Tests
-
-Requires Java Runtime version 16 or later.
-
-To build (using Gradle):
-
-```
-./gradlew build
-```
-
-## Example project
-
-The exporting application is free to structure tracks and timelines in a way that fits its internal model.
-The choice is left to the importing application to either use the level of structure provided (if applicable) or to flatten/convert it to match its model. 
-
-As an example, here's the project.xml of a simple file saved in Bitwig Studio 5.0 with one instrument track and one audio track. As the audio clips in Bitwig Studio are themselves a timeline of audio events, you will notice that there are two levels of <Clips> elements, id25 representing the clip timeline on the arrangement, and id26 representing the  audio events inside the clip.
-
-```xml
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Project version="1.0">
-  <Application name="Bitwig Studio" version="5.0"/>
-  <Transport>
-    <Tempo max="666.000000" min="20.000000" unit="bpm" value="149.000000" id="id0" name="Tempo"/>
-    <TimeSignature denominator="4" numerator="4" id="id1"/>
-  </Transport>
-  <Structure>
-    <Track contentType="notes" loaded="true" id="id2" name="Bass" color="#a2eabf">
-      <Channel audioChannels="2" destination="id15" role="regular" solo="false" id="id3">
-        <Devices>
-          <ClapPlugin deviceID="org.surge-synth-team.surge-xt" deviceName="Surge XT" deviceRole="instrument" loaded="true" id="id7" name="Surge XT">
-            <Parameters/>
-            <Enabled value="true" id="id8" name="On/Off"/>
-            <State path="plugins/d19b1f6e-bbb6-42fe-a6c9-54b41d97a05d.clap-preset"/>
-          </ClapPlugin>
-        </Devices>
-        <Mute value="false" id="id6" name="Mute"/>
-        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id5" name="Pan"/>
-        <Volume max="2.000000" min="0.000000" unit="linear" value="0.659140" id="id4" name="Volume"/>
-      </Channel>
-    </Track>
-    <Track contentType="audio" loaded="true" id="id9" name="Drumloop" color="#b53bba">
-      <Channel audioChannels="2" destination="id15" role="regular" solo="false" id="id10">
-        <Mute value="false" id="id13" name="Mute"/>
-        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id12" name="Pan"/>
-        <Volume max="2.000000" min="0.000000" unit="linear" value="0.177125" id="id11" name="Volume"/>
-      </Channel>
-    </Track>
-    <Track contentType="audio notes" loaded="true" id="id14" name="Master">
-      <Channel audioChannels="2" role="master" solo="false" id="id15">
-        <Mute value="false" id="id18" name="Mute"/>
-        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id17" name="Pan"/>
-        <Volume max="2.000000" min="0.000000" unit="linear" value="1.000000" id="id16" name="Volume"/>
-      </Channel>
-    </Track>
-  </Structure>
-  <Arrangement id="id19">
-    <Lanes timeUnit="beats" id="id20">
-      <Lanes track="id2" id="id21">
-        <Clips id="id22">
-          <Clip time="0.0" duration="8.0" playStart="0.0">
-            <Notes id="id23">
-              <Note time="0.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
-              <Note time="1.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
-              <Note time="4.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
-              <Note time="5.000000" duration="0.250000" channel="0" key="65" vel="0.787402" rel="0.787402"/>
-              <Note time="0.500000" duration="0.250000" channel="0" key="64" vel="0.787402" rel="0.787402"/>
-              <Note time="4.500000" duration="0.250000" channel="0" key="64" vel="0.787402" rel="0.787402"/>
-              <Note time="1.500000" duration="2.500000" channel="0" key="53" vel="0.787402" rel="0.787402"/>
-              <Note time="5.500000" duration="0.250000" channel="0" key="53" vel="0.787402" rel="0.787402"/>
-              <Note time="6.000000" duration="2.000000" channel="0" key="53" vel="0.787402" rel="0.787402"/>
-            </Notes>
-          </Clip>
-        </Clips>
-      </Lanes>
-      <Lanes track="id9" id="id24">
-        <Clips id="id25">
-          <Clip time="0.0" duration="8.00003433227539" playStart="0.0" loopStart="0.0" loopEnd="8.00003433227539" fadeTimeUnit="beats" fadeInTime="0.0" fadeOutTime="0.0" name="Drumfunk3 170bpm">
-            <Clips id="id26">
-              <Clip time="0.0" duration="8.00003433227539" contentTimeUnit="beats" playStart="0.0" fadeTimeUnit="beats" fadeInTime="0.0" fadeOutTime="0.0">
-                <Warps contentTimeUnit="seconds" timeUnit="beats" id="id28">
-                  <Audio algorithm="stretch" channels="2" duration="2.823541666666667" sampleRate="48000" id="id27">
-                    <File path="audio/Drumfunk3 170bpm.wav"/>
-                  </Audio>
-                  <Warp time="0.0" contentTime="0.0"/>
-                  <Warp time="8.00003433227539" contentTime="2.823541666666667"/>
-                </Warps>
-              </Clip>
-            </Clips>
-          </Clip>
-        </Clips>
-      </Lanes>
-      <Lanes track="id14" id="id29">
-        <Clips id="id30"/>
-      </Lanes>
-    </Lanes>
-  </Arrangement>
-  <Scenes/>
-</Project>
-```
-
-## DAW Support
-
-DAWproject 1.0 is currently supported by the following DAWs
-
-* Bitwig Studio 5.0.9
-* PreSonus Studio One 6.5
-* Steinberg Cubase 14
-
-## Converters
-
-There are various tools that can convert from and to DAWproject files
-
-* https://github.com/SatyrDiamond/DawVert: various formats
-* https://github.com/git-moss/ProjectConverter: Cockos Reaper
 ---
 
 #### master-plan.md
@@ -958,25 +770,35 @@ def process_project(input_file: Path, output_dir: Path) -> bool:
     
     try:
         parser = FLProjectParser(str(input_file))
-        project = parser.parse_project()
+        projects = parser.parse_project()  # Returns list of projects
         
-        if not project.arrangements:
+        if not projects:
             logger.error("No arrangements found in project")
             return False
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        clip_paths = {clip: clip.source_path 
-                     for arr in project.arrangements 
-                     for clip in arr.clips}
         
-        generator = DAWProjectGenerator(
-            arrangements=project.arrangements,
-            clip_paths=clip_paths
-        )
+        # Process each project (one per arrangement)
+        for project in projects:
+            if not project.arrangements():  # Call method instead of property
+                continue
+                
+            # Fixed: Access arrangements as a property and iterate over clips properly
+            clip_paths = {
+                clip: clip.source_path 
+                for arrangement in project.arrangements()
+                for clip in arrangement.clips
+            }
+            
+            generator = DAWProjectGenerator(
+                arrangements=project.arrangements(),
+                clip_paths=clip_paths
+            )
 
-        output_file = output_dir / f"{project.name}.dawproject"
-        generator.generate_dawproject(str(output_file))
-        logger.info(f"Generated: {output_file}")
+            output_file = output_dir / f"{project.name}.dawproject"
+            generator.generate_dawproject(str(output_file))
+            logger.info(f"Generated: {output_file}")
+        
         return True
 
     except Exception as e:
@@ -1169,7 +991,9 @@ class DAWProjectGenerator:
                 
             finally:
                 if temp_dir.exists():
-                    shutil.rmtree(temp_dir)
+                    # keeping existing temp-dir for debugging
+                    pass
+                    # shutil.rmtree(temp_dir)
                     
         except Exception as e:
             self.logger.error(f"Failed to generate DAWproject: {e}")
@@ -1350,8 +1174,8 @@ from xml.etree import ElementTree as ET
 from typing import Optional
 from pathlib import Path
 
-class XMLFormatter:
-    """Handles XML formatting and pretty printing."""
+class XMLWriter:
+    """Handles XML file writing with proper formatting."""
     
     def format_xml(elem: ET.Element, level: int = 0, indent: str = "  ") -> None:
         """Format XML element with proper indentation."""
@@ -1362,33 +1186,27 @@ class XMLFormatter:
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
             for subelem in elem:
-                XMLFormatter.format_xml(subelem, level + 1, indent)
+                XMLWriter.format_xml(subelem, level + 1, indent)
             if not elem.tail or not elem.tail.strip():
                 elem.tail = i
         else:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = i
 
-class XMLWriter:
-    """Handles XML file writing with proper formatting."""
-    
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-
     def write_xml(
-        self,
-        element: ET.Element,
+        root: ET.Element,
         output_path: Path,
         encoding: str = 'UTF-8',
         xml_declaration: bool = True
     ) -> bool:
         """Write formatted XML to file."""
+        logger = logging.getLogger(__name__)
         try:
             # Format the XML
-            XMLFormatter.format_xml(element)
+            XMLWriter.format_xml(root)
             
             # Convert to string
-            xml_str = ET.tostring(element, encoding='unicode')
+            xml_str = ET.tostring(root, encoding='unicode')
             
             # Write to file
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1397,10 +1215,11 @@ class XMLWriter:
                     f.write(f'<?xml version="1.0" encoding="{encoding}"?>\n')
                 f.write(xml_str)
                 
+            logger.debug(f"Successfully wrote XML to {output_path}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to write XML to {output_path}: {e}")
+            logger.error(f"Failed to write XML to {output_path}: {e}")
             return False
 ```
 ---
@@ -1426,84 +1245,28 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from pathlib import Path
 
+from .track import Track
+
 from .clip import Clip
 
 class Arrangement:
-    """Represents an arrangement of audio clips."""
+    """Represents an arrangement containing tracks and clips."""
     
-    name: str
-    clips: List[Clip] = field(default_factory=list)
-    
-    def __post_init__(self):
-        """Validate arrangement after initialization."""
-        if not self.name:
-            raise ValueError("Arrangement name cannot be empty")
-
-    def __hash__(self):
-        """Make arrangement hashable by name."""
-        return hash(self.name)
-    
-    def __eq__(self, other):
-        """Compare arrangements by name."""
-        if not isinstance(other, Arrangement):
-            return NotImplemented
-        return self.name == other.name
-
-    def add_clip(self, clip: Clip) -> None:
-        """Add a clip to the arrangement.
+    def __init__(self, name: str):
+        self.name = name
+        self._tracks: List[Track] = []
         
-        Args:
-            clip: Clip to add
-            
-        Raises:
-            ValueError: If clip with same name already exists
-        """
-        if self.get_clip_by_name(clip.name):
-            raise ValueError(f"Clip with name '{clip.name}' already exists")
-        object.__setattr__(self, 'clips', list(self.clips) + [clip])
-
-    def remove_clip(self, clip: Clip) -> None:
-        """Remove a clip from the arrangement.
+    def add_track(self, track: Track) -> None:
+        """Add a track to the arrangement."""
+        self._tracks.append(track)
         
-        Args:
-            clip: Clip to remove
-        """
-        object.__setattr__(self, 'clips', [c for c in self.clips if c != clip])
-
-    def get_clip_by_name(self, name: str) -> Optional[Clip]:
-        """Find clip by name.
+    def get_tracks(self) -> List[Track]:
+        """Get list of tracks."""
+        return self._tracks.copy()
         
-        Args:
-            name: Name to search for
-            
-        Returns:
-            Matching clip or None if not found
-        """
-        return next((clip for clip in self.clips if clip.name == name), None)
-
-    def get_duration(self) -> float:
-        """Get total arrangement duration.
-        
-        Returns:
-            Duration in seconds
-        """
-        if not self.clips:
-            return 0.0
-        return max(clip.position + clip.duration for clip in self.clips)
-
-    def validate(self) -> None:
-        """Validate arrangement integrity.
-        
-        Raises:
-            ValueError: If validation fails
-        """
-        if not self.name:
-            raise ValueError("Arrangement name cannot be empty")
-            
-        # Check for duplicate clip names
-        names = [clip.name for clip in self.clips]
-        if len(names) != len(set(names)):
-            raise ValueError("Duplicate clip names found")
+    def has_tracks(self) -> bool:
+        """Check if arrangement has any tracks with clips."""
+        return any(track.clips for track in self._tracks)
 ```
 ---
 
@@ -1535,91 +1298,15 @@ class BaseProject:
         return self._arrangements.copy()
 
     def add_arrangement(self, arrangement: 'Arrangement') -> None:
-        """Add an arrangement to the project.
-        
-        Args:
-            arrangement: Arrangement to add
-            
-        Raises:
-            ValueError: If arrangement with same name already exists
-        """
+        """Add an arrangement to the project."""
         if arrangement.name in [arr.name for arr in self._arrangements]:
             raise ValueError(f"Arrangement {arrangement.name} already exists")
         self._arrangements.append(arrangement)
 
     def remove_arrangement(self, arrangement: 'Arrangement') -> None:
-        """Remove an arrangement from the project.
-        
-        Args:
-            arrangement: Arrangement to remove
-        """
+        """Remove an arrangement from the project."""
         if arrangement in self._arrangements:
             self._arrangements.remove(arrangement)
-
-    def validate(self) -> None:
-        """Validate project integrity.
-        
-        Raises:
-            ValueError: If validation fails
-        """
-        if not self.name:
-            raise ValueError("Project name cannot be empty")
-            
-        if self.source_path and not isinstance(self.source_path, Path):
-            raise TypeError("source_path must be a Path object")
-            
-        if self.output_dir and not isinstance(self.output_dir, Path):
-            raise TypeError("output_dir must be a Path object")
-
-        # Validate timing
-        if not isinstance(self.timing, ProjectTiming):
-            raise TypeError("timing must be a ProjectTiming object")
-        if self.timing.tempo <= 0:
-            raise ValueError("Project tempo must be positive")
-            
-        # Check for arrangement name uniqueness
-        names = [arr.name for arr in self._arrangements]
-        duplicate_names = set(name for name in names if names.count(name) > 1)
-        if duplicate_names:
-            raise ValueError(f"Duplicate arrangement names found: {', '.join(duplicate_names)}")
-
-    def get_all_clip_paths(self) -> Set[Path]:  # Changed from set[Path] to Set[Path]
-        """Get set of all unique audio file paths used in project."""
-        paths = set()
-        for arrangement in self._arrangements:
-            for clip in arrangement.clips:
-                if clip.source_path:
-                    paths.add(clip.source_path)
-        return paths
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert project to dictionary format."""
-        return {
-            'name': self.name,
-            'timing': self.timing.to_dict(),
-            'source_path': str(self.source_path) if self.source_path else None,
-            'output_dir': str(self.output_dir) if self.output_dir else None,
-            'arrangements': [arr.to_dict() for arr in self._arrangements]
-        }
-
-    def from_dict(cls, data: Dict[str, Any]) -> 'BaseProject':
-        """Create project instance from dictionary data."""
-        timing_data = data.get('timing', {})
-        timing = ProjectTiming(
-            tempo=float(timing_data.get('tempo', {}).get('value', 120.0)),
-            time_signature_numerator=int(timing_data.get('time_signature', {}).get('numerator', 4)),
-            time_signature_denominator=int(timing_data.get('time_signature', {}).get('denominator', 4))
-        )
-        
-        source_path = Path(data['source_path']) if data.get('source_path') else None
-        output_dir = Path(data['output_dir']) if data.get('output_dir') else None
-        
-        return cls(
-            name=data['name'],
-            timing=timing,
-            source_path=source_path,
-            output_dir=output_dir
-        )
 ```
 ---
 
@@ -1627,99 +1314,110 @@ class BaseProject:
 ```
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 class Clip:
-    """Represents an audio clip in an arrangement."""
-    name: str
-    position: float
-    duration: float
-    color: str
-    source_path: Path
-    volume: float = 1.0
-    muted: bool = False
-    arrangement_name: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Represents an audio clip in an arrangement.
+    
+    Maps between FL Studio playlist items/channels and DAWproject clip elements.
+    """
+    # Required core attributes
+    name: str                     # Unique name for the clip
+    position: float               # Position in beats
+    duration: float               # Duration in beats
+    source_path: Path            # Path to source audio file
+    
+    # Track and routing
+    track_name: str              # Name of containing track
+    track_id: Optional[str] = None  # XML ID reference for track
+    
+    # Optional attributes with defaults
+    color: str = "#a2eabf"      # Default color matching sample
+    volume: float = 1.0         # Normalized volume (0-1)
+    muted: bool = False         # Mute state
+    
+    # Organization
+    arrangement_name: Optional[str] = None  # Parent arrangement name
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Additional metadata
 
     def __post_init__(self):
-        """Validate clip attributes after initialization."""
+        """Validate and normalize clip attributes."""
+        # Validate required fields
+        if not self.name:
+            raise ValueError("Clip name cannot be empty")
         if self.position < 0:
             raise ValueError("Position cannot be negative")
         if self.duration <= 0:
             raise ValueError("Duration must be positive")
+        if not self.track_name:
+            raise ValueError("Track name cannot be empty")
+            
+        # Normalize paths
+        if isinstance(self.source_path, str):
+            self.source_path = Path(self.source_path)
+        
+        # Normalize names
+        self.name = self._sanitize_name(self.name)
+        self.track_name = self._sanitize_name(self.track_name)
+        
+        # Validate color format
         if not self.color.startswith('#') or len(self.color) != 7:
             raise ValueError("Color must be in #RRGGBB format")
-        
-        # Sanitize name (remove spaces and special characters)
-        object.__setattr__(self, 'name', self._sanitize_name(self.name))
+            
+        # Normalize volume
+        self.volume = max(0.0, min(1.0, float(self.volume)))  # Clamp to 0-1
 
     def _sanitize_name(self, name: str) -> str:
-        """Sanitize the clip name by replacing spaces and special characters."""
-        return name.replace(' ', '_').replace('-', '_')
+        """Sanitize a name for use in DAWproject XML."""
+        # Replace spaces and special characters
+        sanitized = name.replace(' ', '_')\
+                       .replace('-', '_')\
+                       .replace('.', '_')\
+                       .replace('(', '')\
+                       .replace(')', '')\
+                       .replace('[', '')\
+                       .replace(']', '')\
+                       .replace('/', '_')\
+                       .replace('\\', '_')
+        
+        # Remove any double underscores
+        while '__' in sanitized:
+            sanitized = sanitized.replace('__', '_')
+            
+        # Remove any leading/trailing underscores
+        return sanitized.strip('_')
 
-    def __eq__(self, other):
-        """Compare clips ignoring arrangement_name."""
+    def __eq__(self, other: object) -> bool:
+        """Compare clips based on core attributes including track assignment."""
         if not isinstance(other, Clip):
             return NotImplemented
         return (
             self.name == other.name and
             self.position == other.position and
             self.duration == other.duration and
-            self.color == other.color and
+            self.track_name == other.track_name and
             str(self.source_path) == str(other.source_path) and
             self.volume == other.volume and
             self.muted == other.muted
         )
 
-    def __hash__(self):
-        """Hash based on immutable attributes."""
+    def __hash__(self) -> int:
+        """Hash based on immutable attributes including track."""
         return hash((
             self.name,
             self.position,
             self.duration,
-            self.color,
+            self.track_name,
             str(self.source_path),
             self.volume,
             self.muted
         ))
 
-    def full_equals(self, other):
-        """Compare clips including arrangement_name."""
-        return self == other and self.arrangement_name == other.arrangement_name
-
-    def with_arrangement(self, name: str) -> 'Clip':
-        """Return a new clip with the specified arrangement name."""
-        return Clip(
-            name=self.name,
-            position=self.position,
-            duration=self.duration,
-            color=self.color,
-            source_path=self.source_path,
-            volume=self.volume,
-            muted=self.muted,
-            arrangement_name=name,
-            metadata=self.metadata.copy()
-        )
-
-    def with_metadata(self, key: str, value: Any) -> 'Clip':
-        """Return a new clip with added metadata."""
-        new_metadata = self.metadata.copy()
-        new_metadata[key] = value
-        return Clip(
-            name=self.name,
-            position=self.position,
-            duration=self.duration,
-            color=self.color,
-            source_path=self.source_path,
-            volume=self.volume,
-            muted=self.muted,
-            arrangement_name=self.arrangement_name,
-            metadata=new_metadata
-        )
-
-    def get_metadata(self, key: str, default: Any = None) -> Any:
-        """Get metadata value by key."""
-        return self.metadata.get(key, default)
+    def clone(self, **updates) -> 'Clip':
+        """Create a new clip with updated attributes."""
+        data = self.__dict__.copy()
+        data.update(updates)
+        return Clip(**data)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert clip to dictionary representation."""
@@ -1729,10 +1427,12 @@ class Clip:
             'duration': self.duration,
             'color': self.color,
             'source_path': str(self.source_path),
+            'track_name': self.track_name,
+            'track_id': self.track_id,
             'volume': self.volume,
             'muted': self.muted,
             'arrangement_name': self.arrangement_name,
-            'metadata': self.metadata
+            'metadata': self.metadata.copy()
         }
 
     def from_dict(cls, data: Dict[str, Any]) -> 'Clip':
@@ -1740,64 +1440,90 @@ class Clip:
         data = data.copy()
         data['source_path'] = Path(data['source_path'])
         return cls(**data)
+
+    def validate(self) -> List[str]:
+        """Validate clip data and return list of any issues found."""
+        issues = []
+        
+        if not self.name:
+            issues.append("Missing clip name")
+        if self.position < 0:
+            issues.append("Negative position")
+        if self.duration <= 0:
+            issues.append("Invalid duration")
+        if not self.track_name:
+            issues.append("Missing track assignment")
+        if not self.source_path.exists():
+            issues.append(f"Audio file not found: {self.source_path}")
+        if not 0 <= self.volume <= 1:
+            issues.append(f"Volume {self.volume} out of range [0,1]")
+            
+        return issues
+
+    def get_end_position(self) -> float:
+        """Get the end position of this clip in beats."""
+        return self.position + self.duration
+
+    def overlaps(self, other: 'Clip') -> bool:
+        """Check if this clip overlaps with another clip on the same track."""
+        if self.track_name != other.track_name:
+            return False
+            
+        return (
+            self.position < other.get_end_position() and
+            other.position < self.get_end_position()
+        )
 ```
 ---
 
 #### src\fl2cu\models\project.py
 ```
-# fl2cu/models/project.py
+# src/fl2cu/models/project.py
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Set
 
 from fl2cu.models.base import BaseProject
 from fl2cu.models.arrangement import Arrangement
+from fl2cu.models.timing import ProjectTiming
 
 class Project(BaseProject):
     """Project class extending base functionality."""
     def __init__(
         self,
         name: str,
+        timing: Optional[ProjectTiming] = None,
         source_path: Optional[Path] = None,
         output_dir: Optional[Path] = None
     ):
-        super().__init__(name, source_path, output_dir)
-        
+        super().__init__(name=name, 
+                        timing=timing,
+                        source_path=source_path, 
+                        output_dir=output_dir)
+    
     def add_arrangement(self, arrangement: Arrangement) -> None:
+        """Add an arrangement to the project."""
         if arrangement.name in [arr.name for arr in self._arrangements]:
             raise ValueError(f"Arrangement {arrangement.name} already exists")
         self._arrangements.append(arrangement)
         
     def remove_arrangement(self, arrangement: Arrangement) -> None:
         """Remove an arrangement from the project."""
-        if arrangement in self.arrangements:
-            self.arrangements.remove(arrangement)
+        if arrangement in self._arrangements:
+            self._arrangements.remove(arrangement)
             
     def get_arrangement_by_name(self, name: str) -> Optional[Arrangement]:
         """Find an arrangement by its name."""
-        for arrangement in self.arrangements:
+        for arrangement in self._arrangements:
             if arrangement.name == name:
                 return arrangement
         return None
         
     def validate(self) -> None:
         """Validate project and all its arrangements."""
-        if not self.name:
-            raise ValueError("Project name cannot be empty")
-            
-        if self.source_path and not isinstance(self.source_path, Path):
-            raise TypeError("source_path must be a Path object")
-            
-        if self.output_dir and not isinstance(self.output_dir, Path):
-            raise TypeError("output_dir must be a Path object")
-            
-        # Check for arrangement name uniqueness
-        names = [arr.name for arr in self.arrangements]
-        duplicate_names = set(name for name in names if names.count(name) > 1)
-        if duplicate_names:
-            raise ValueError(f"Duplicate arrangement names found: {', '.join(duplicate_names)}")
+        super().validate()  # Call parent validation first
             
         # Validate each arrangement
-        for arrangement in self.arrangements:
+        for arrangement in self._arrangements:
             try:
                 arrangement.validate()
             except ValueError as e:
@@ -1806,7 +1532,7 @@ class Project(BaseProject):
     def get_all_clip_paths(self) -> Set[Path]:
         """Get set of all unique audio file paths used in project."""
         paths = set()
-        for arrangement in self.arrangements:
+        for arrangement in self._arrangements:
             for clip in arrangement.clips:
                 if clip.source_path:
                     paths.add(clip.source_path)
@@ -1827,20 +1553,27 @@ class Project(BaseProject):
         
     def to_dict(self) -> Dict[str, Any]:
         """Convert project to dictionary format for serialization."""
-        return {
-            'name': self.name,
-            'source_path': str(self.source_path) if self.source_path else None,
-            'output_dir': str(self.output_dir) if self.output_dir else None,
-            'arrangements': [arr.to_dict() for arr in self.arrangements]
-        }
+        base_dict = super().to_dict()
+        base_dict.update({
+            'arrangements': [arr.to_dict() for arr in self._arrangements]
+        })
+        return base_dict
     
     def from_dict(cls, data: Dict[str, Any]) -> 'Project':
         """Create project instance from dictionary data."""
+        timing_data = data.get('timing', {})
+        timing = ProjectTiming(
+            tempo=float(timing_data.get('tempo', 120.0)),
+            time_signature_numerator=int(timing_data.get('time_signature_numerator', 4)),
+            time_signature_denominator=int(timing_data.get('time_signature_denominator', 4))
+        )
+        
         source_path = Path(data['source_path']) if data.get('source_path') else None
         output_dir = Path(data['output_dir']) if data.get('output_dir') else None
         
         project = cls(
             name=data['name'],
+            timing=timing,
             source_path=source_path,
             output_dir=output_dir
         )
@@ -1895,11 +1628,13 @@ class ProjectTiming:
 ```
 from typing import List, Optional
 
+
+from ..models.track import Track
 from ..models.arrangement import Arrangement
 from .clip_parser import FLClipParser
 
 class FLArrangementParser:
-    """Handles parsing of FL Studio arrangements."""
+    """Handles parsing of FL Studio arrangements and their tracks."""
     
     def __init__(self, fl_project: 'pyflp.Project', clip_parser: FLClipParser):
         self.fl_project = fl_project
@@ -1907,102 +1642,142 @@ class FLArrangementParser:
         self.logger = logging.getLogger(__name__)
 
     def parse_arrangements(self) -> List[Arrangement]:
-        """Extract all arrangements from FL Studio project."""
+        """Extract all arrangements with their tracks and clips."""
+        if not hasattr(self.fl_project, 'arrangements'):
+            raise ValueError("Could not access arrangements in FL Studio project")
+                
         arrangements = []
+        fl_arrangements = list(self.fl_project.arrangements)
+        self.logger.debug(f"Found {len(fl_arrangements)} FL Studio arrangements")
         
-        # Try FL Studio 12.9+ arrangements first
-        if hasattr(self.fl_project, 'arrangements'):
-            arrangements.extend(self._parse_native_arrangements())
-        
-        # Fall back to playlist if no arrangements found
-        if not arrangements and hasattr(self.fl_project, 'playlist'):
-            arrangement = self._parse_playlist_as_arrangement()
-            if arrangement and arrangement.clips:
-                arrangements.append(arrangement)
-        
-        return arrangements
+        for fl_arr in fl_arrangements:
+            try:
+                # Create arrangement
+                arrangement_name = getattr(fl_arr, 'name', None) or "Unnamed Arrangement"
+                arrangement = Arrangement(name=arrangement_name)
+                self.logger.debug(f"\nProcessing arrangement: {arrangement_name}")
+                
+                # Get playlist data
+                playlist_data = None
+                if hasattr(fl_arr, 'tracks'):
+                    fl_tracks = list(fl_arr.tracks)
+                    self.logger.debug(f"Found {len(fl_tracks)} FL Studio tracks")
+                    
+                    # Process each track
+                    for track_idx, fl_track in enumerate(fl_tracks):
+                        # Get track clips
+                        track_clips = []
+                        if hasattr(fl_track, '__iter__'):
+                            items = list(fl_track)
+                            if len(items) < 1:
+                                continue
+                            self.logger.debug(f"Track contains {len(items)} items")
+                            
+                            for item in items:
+                                self.logger.debug(f"Processing item: {item}")
+                                
+                                # Try to create clip from item
+                                clip = None
+                                if hasattr(item, 'channel'):
+                                    self.logger.debug(f"Item has channel: {item.channel}")
+                                    clip = self.clip_parser.create_clip(
+                                        channel=item.channel,
+                                        position=item.position,
+                                        track_name=f"Track {track_idx}"
+                                    )
+                                
+                                if clip:
+                                    track_clips.append(clip)
+                                    self.logger.debug(f"Created clip: {clip.name}")
+                        
+                        # Only create track if it has clips
+                        if track_clips:
+                            track = Track(
+                                name=getattr(fl_track, 'name', None) or f"Track {track_idx}",
+                                id=f"track-{track_idx}",
+                                clips=track_clips
+                            )
+                            arrangement.add_track(track)
+                            self.logger.debug(f"Added track with {len(track_clips)} clips")
+                
+                if arrangement.has_tracks():
+                    arrangements.append(arrangement)
+                    self.logger.debug(
+                        f"Successfully parsed arrangement '{arrangement.name}' with "
+                        f"{len(arrangement.get_tracks())} tracks"
+                    )
+                else:
+                    self.logger.debug("Skipping arrangement - no tracks with clips found")
+                        
+            except Exception as e:
+                self.logger.error(f"Failed to parse arrangement {getattr(fl_arr, 'name', 'Unknown')}: {e}")
+                self.logger.debug("Stack trace:", exc_info=True)
 
-    def _parse_native_arrangements(self) -> List[Arrangement]:
-        arrangements = []
-        for arr in self.fl_project.arrangements:
-            if not arr.name:
-                continue
-            
-            arrangement = Arrangement(name=arr.name)
-            self._process_tracks(arrangement, arr.tracks)
-            
-            if arrangement.clips:
-                arrangements.append(arrangement)
+        if not arrangements:
+            raise ValueError("No valid arrangements found in FL Studio project")
                 
         return arrangements
-
-    def _parse_playlist_as_arrangement(self) -> Optional[Arrangement]:
-        arrangement = Arrangement(name=self.fl_project.name)
-        
-        for item in self.fl_project.playlist:
-            if hasattr(item, 'channel'):
-                clip = self.clip_parser.create_clip(item.channel, item.position)
-                if clip:
-                    arrangement.add_clip(clip)
-                    
-        return arrangement if arrangement.clips else None
-
-    def _process_tracks(self, arrangement: Arrangement, tracks):
-        for track in tracks:
-            for item in track:
-                if hasattr(item, 'channel'):
-                    clip = self.clip_parser.create_clip(item.channel, item.position)
-                    if clip:
-                        arrangement.add_clip(clip)
 ```
 ---
 
 #### src\fl2cu\parser\clip_parser.py
 ```
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 from ..models.clip import Clip
 
 class FLClipParser:
-    """Handles parsing of audio clips from FL Studio channels."""
+    """Handles parsing of audio clips from FL Studio channels and playlist items."""
     
-    def __init__(self, fl_project: 'pyflp.Project'):
+    def __init__(self, fl_project: 'pyflp.Project', path_resolver: Callable):
         self.fl_project = fl_project
         self.ppq = getattr(fl_project, 'ppq', 96)
+        self.path_resolver = path_resolver
         self.logger = logging.getLogger(__name__)
 
-    def create_clip(self, channel, position: float) -> Optional[Clip]:
-        """Create clip from FL Studio channel."""
-        if not hasattr(channel, 'sample_path'):
-            return None
-
+    def create_clip(self, channel, position: float, track_name: Optional[str] = None) -> Optional[Clip]:
+        """Create clip from FL Studio channel with optional track assignment."""
         try:
-            source_path = Path(channel.sample_path)
-            if not source_path.exists():
-                self.logger.warning(f"Sample not found: {source_path}")
+            # Get base name from channel and ensure uniqueness with position
+            base_name = getattr(channel, 'name', '') or "unnamed_clip"
+            base_name = base_name.replace(" ", "_")
+            name = f"{base_name}_{int(position)}"
+            
+            # Get sample path if available
+            source_path = None
+            if hasattr(channel, 'sample_path') and channel.sample_path:
+                source_path = self.path_resolver(str(channel.sample_path))
+                self.logger.debug(f"Sample path: {source_path}")
+
+            if not source_path:
                 return None
 
-            name = getattr(channel, 'name', '') or source_path.stem
-            position_seconds = float(position) / self.ppq
-            duration = float(getattr(channel, 'sample_length', self.ppq)) / self.ppq
+            # Calculate timing (convert from PPQ to time)
+            position_beats = float(position) / self.ppq  # Convert to beats
+            duration = float(getattr(channel, 'length', self.ppq)) / self.ppq  # Length in beats
             
-            # Get channel color
+            # Get color (default if not set)
             color = self._get_color(channel)
             
-            # Get volume normalized to 0-1
+            # Get normalized volume
             volume = self._get_volume(channel)
+            
+            # Get mute state
+            muted = not bool(getattr(channel, 'enabled', True))
 
+            # Create clip with track assignment
             clip = Clip(
-                name=f"{name}_{position}",
-                position=position_seconds,
+                name=name,
+                position=position_beats,
                 duration=duration,
                 color=color,
                 source_path=source_path,
+                track_name=track_name or "Default",
                 volume=volume,
-                muted=not bool(getattr(channel, 'enabled', True))
+                muted=muted
             )
             
-            self.logger.debug(f"Created clip {clip.name} at {position_seconds}s")
+            self.logger.debug(f"Created clip {clip.name} at {position_beats} beats on track {clip.track_name}")
             return clip
 
         except Exception as e:
@@ -2010,6 +1785,7 @@ class FLClipParser:
             return None
 
     def _get_color(self, channel) -> str:
+        """Extract color from channel with fallback to default."""
         try:
             if hasattr(channel, 'color'):
                 color = channel.color
@@ -2022,13 +1798,15 @@ class FLClipParser:
                     return f"#{r:02x}{g:02x}{b:02x}"
         except Exception as e:
             self.logger.warning(f"Failed to get color: {e}")
-        return "#FFFFFF"
+        return "#a2eabf"  # Default color matching sample
 
     def _get_volume(self, channel) -> float:
+        """Get normalized volume from channel."""
         try:
             if hasattr(channel, 'volume'):
                 raw_volume = float(channel.volume)
-                return raw_volume / 100.0 if raw_volume > 1.0 else raw_volume
+                # FL Studio uses 0-12800 range, normalize to 0-1
+                return min(raw_volume / 10000.0, 1.0)
         except Exception as e:
             self.logger.warning(f"Failed to get volume: {e}")
         return 1.0
@@ -2085,6 +1863,9 @@ class FLPatternParser:
 #### src\fl2cu\parser\project_parser.py
 ```
 from pathlib import Path
+from typing import List, Optional, Dict, Union
+
+
 from .timing_parser import FLTimingParser
 from .clip_parser import FLClipParser
 from .arrangement_parser import FLArrangementParser
@@ -2099,33 +1880,63 @@ class FLProjectParser:
             raise FileNotFoundError(f"Project file not found: {file_path}")
             
         self.logger = logging.getLogger(__name__)
-        self.fl_project = pyflp.parse(file_path)
+        self.logger.debug(f"Loading FL Studio project: {file_path}")
         
+        # Parse FL Studio project
+        try:
+            self.fl_project = pyflp.parse(file_path)
+            self.logger.debug(f"Project version: {self.fl_project.version}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse FL Studio project: {e}")
+
         # Initialize specialized parsers
         self.timing_parser = FLTimingParser(self.fl_project)
-        self.clip_parser = FLClipParser(self.fl_project)
+        self.clip_parser = FLClipParser(self.fl_project, self.resolve_fl_studio_path)
         self.arrangement_parser = FLArrangementParser(self.fl_project, self.clip_parser)
 
-    def parse_project(self) -> Project:
-        """Parse FL Studio project using specialized parsers."""
+    def resolve_fl_studio_path(self, path: str) -> Optional[Path]:
+        """Resolve FL Studio environment variables in paths."""
+        fl_variables = {
+            "FLStudioUserData": "C:\\Users\\poznas\\Documents\\Image-Line\\Data\\FL Studio",
+            "FLStudioInstallDir": os.getenv("PROGRAMFILES", "") + "\\Image-Line\\FL Studio 21",
+        }
+        
+        try:
+            for var_name, var_value in fl_variables.items():
+                var_pattern = f"%{var_name}%"
+                if var_pattern in path:
+                    path = path.replace(var_pattern, var_value)
+                    
+            resolved_path = Path(path)
+            return resolved_path if resolved_path.exists() else None
+        except Exception as e:
+            self.logger.error(f"Failed to resolve path {path}: {e}")
+            return None
+
+    def parse_project(self) -> List[Project]:
+        """Parse FL Studio project and create separate DAWproject for each arrangement."""
         try:
             # Parse timing info
             timing = self.timing_parser.parse_timing()
             
-            # Create project
-            project = Project(
-                name=self.file_path.stem,
-                timing=timing,
-                source_path=self.file_path
-            )
-            
-            # Parse arrangements
+            # Parse arrangements with their tracks and clips
             arrangements = self.arrangement_parser.parse_arrangements()
-            for arrangement in arrangements:
-                project.add_arrangement(arrangement)
             
-            self.logger.info(f"Parsed project with {len(arrangements)} arrangements")
-            return project
+            # Create separate project for each arrangement
+            projects = []
+            for arrangement in arrangements:
+                # Create arrangement-specific project
+                project = Project(
+                    name=f"{self.file_path.stem}_{arrangement.name}",
+                    timing=timing,
+                    source_path=self.file_path
+                )
+                
+                # Add the arrangement with all its tracks and clips
+                project.add_arrangement(arrangement)
+                projects.append(project)
+            
+            return projects
             
         except Exception as e:
             self.logger.error(f"Failed to parse project: {e}")

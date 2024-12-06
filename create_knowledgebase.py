@@ -50,6 +50,7 @@ excluded_directories = [
     '/lib/python',      # Python library files
     '/Scripts/',        # Python scripts directory
     '/Include/',        # Python include directory
+    '/knowledgebase/'
 ]
 
 # Excluded specific filenames

@@ -1,12 +1,11 @@
 from pathlib import Path
+from xml.etree import ElementTree as ET
+from typing import Dict, List, Optional
 import logging
 import shutil
 import zipfile
-from xml.etree import ElementTree as ET
-from typing import Dict, List, Optional
 
 from ..generator.xml_utils import XMLWriter
-
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
 from ..models.timing import ProjectTiming
@@ -81,10 +80,12 @@ class DAWProjectGenerator:
             track_lanes = ET.SubElement(lanes, "Lanes", track=f"track-{i}", id=f"track-lanes-{i}")
             clips = ET.SubElement(track_lanes, "Clips", id=f"clips-{i}")
             
-            for clip in arr.clips:
-                clip_el = XMLBuilder.create_clip_element(clip, self.clip_paths.get(clip))
-                if clip_el is not None:
-                    clips.append(clip_el)
+            # Fixed: Iterate through tracks to get clips
+            for track in arr.get_tracks():
+                for clip in track.clips:
+                    clip_el = XMLBuilder.create_clip_element(clip, self.clip_paths.get(clip))
+                    if clip_el is not None:
+                        clips.append(clip_el)
         
         return root
 
@@ -105,7 +106,7 @@ class DAWProjectGenerator:
         audio_dir.mkdir(exist_ok=True)
         
         for clip, source_path in self.clip_paths.items():
-            if source_path.exists():
+            if source_path and source_path.exists():
                 dest_path = audio_dir / f"{clip.name}.wav"
                 shutil.copy2(source_path, dest_path)
             else:
