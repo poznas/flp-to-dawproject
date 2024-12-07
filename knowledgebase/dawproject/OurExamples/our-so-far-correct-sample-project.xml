@@ -1,46 +1,206 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Project version="1.0">
-    <Application name="FL Studio Converter" version="1.0" />
-    <Transport>
-        <Tempo max="960.000000" min="1.000000" unit="bpm" value="150.000000" id="tempo-1" />
-        <TimeSignature denominator="4" numerator="4" id="ts-1" />
-    </Transport>
-    <Structure>
-        <Track contentType="audio" loaded="true" id="id5" name="NAGRYWKI_MAIN" color="#a2eabf">
-            <Channel audioChannels="2" role="master" id="id6">
-                <Volume max="1.000000" min="0.000000" unit="linear" value="1.000000" id="id7" />
-                <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id8" />
-                <Mute value="false" id="id9" />
-            </Channel>
-        </Track>
-        <Track contentType="audio" loaded="true" id="id10" name="NAGRYWKI_CHOREK" color="#a2eabf">
-            <Channel audioChannels="2" role="regular" id="id11">
-                <Volume max="1.000000" min="0.000000" unit="linear" value="1.000000" id="id12" />
-                <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id13" />
-                <Mute value="false" id="id14" />
-            </Channel>
-        </Track>
-    </Structure>
-    <Arrangement id="id0">
-        <Lanes timeUnit="beats" id="id1">
-            <Lanes track="id5" id="id15">
-                <Clips timeUnit="beats" id="id16">
-                    <Clip time="77.437500" duration="1.000000" contentTimeUnit="beats"
-                        name="blank_gawryle_2024_10_26_00_18_20_Insert_3_7434">
-                        <Clips id="id17">
-                            <Clip time="0.000000" duration="1.000000" contentTimeUnit="beats"
-                                playStart="0.000000">
-                                <Audio algorithm="raw" channels="2" duration="1.0"
-                                    sampleRate="44100" id="id18">
-                                    <File
-                                        path="audio/blank_gawryle_2024_10_26_00_18_20_Insert_3_7434.wav" />
-                                </Audio>
-                            </Clip>
-                        </Clips>
-                    </Clip>
-                </Clips>
-            </Lanes>
-        </Lanes>
-    </Arrangement>
-    <Scenes />
+	<Application name="Cubase" version="14.0.5" />
+	<Transport>
+		<Tempo unit="bpm" value="130" />
+		<TimeSignature numerator="4" denominator="4" />
+	</Transport>
+	<Structure>
+		<Track contentType="tracks" id="id1" name="Input/Output" color="#929395ff" />
+		<Track contentType="audio" id="id2" name="Track 3" color="#a2eabfff">
+			<Channel role="regular" audioChannels="2" id="id3" name="Track 3" destination="id0">
+				<Mute value="false" name="Mute" />
+				<Pan value="0.5" unit="normalized" min="0" max="1" name="Pan" />
+				<Volume value="1" unit="linear" min="0" max="2" name="Volume" />
+			</Channel>
+		</Track>
+		<Track contentType="audio" id="id4" name="Track 7" color="#a2eabfff">
+			<Channel role="regular" audioChannels="2" id="id5" name="Track 7" destination="id0">
+				<Mute value="false" name="Mute" />
+				<Pan value="0.5" unit="normalized" min="0" max="1" name="Pan" />
+				<Volume value="1" unit="linear" min="0" max="2" name="Volume" />
+			</Channel>
+		</Track>
+		<Track contentType="audio" id="id6" name="Track 9" color="#a2eabfff">
+			<Channel role="regular" audioChannels="2" id="id7" name="Track 9" destination="id0">
+				<Mute value="false" name="Mute" />
+				<Pan value="0.5" unit="normalized" min="0" max="1" name="Pan" />
+				<Volume value="1" unit="linear" min="0" max="2" name="Volume" />
+			</Channel>
+		</Track>
+		<Track contentType="audio" id="id8" name="Track 12" color="#a2eabfff">
+			<Channel role="regular" audioChannels="2" id="id9" name="Track 12" destination="id0">
+				<Mute value="false" name="Mute" />
+				<Pan value="0.5" unit="normalized" min="0" max="1" name="Pan" />
+				<Volume value="1" unit="linear" min="0" max="2" name="Volume" />
+			</Channel>
+		</Track>
+		<Track contentType="audio" id="id10" name="Track 13" color="#a2eabfff">
+			<Channel role="regular" audioChannels="2" id="id11" name="Track 13" destination="id0">
+				<Mute value="false" name="Mute" />
+				<Pan value="0.5" unit="normalized" min="0" max="1" name="Pan" />
+				<Volume value="1" unit="linear" min="0" max="2" name="Volume" />
+			</Channel>
+		</Track>
+		<Channel role="master" audioChannels="2" id="id0" name="Stereo Out">
+			<Mute value="false" name="Mute" />
+			<Pan value="0.5" unit="normalized" min="0" max="1" name="Pan" />
+			<Volume value="1" unit="linear" min="0" max="2" name="Volume" />
+		</Channel>
+	</Structure>
+	<Arrangement>
+		<Lanes timeUnit="seconds">
+			<Lanes track="id1" />
+			<Lanes track="id2">
+				<Clips>
+					<Clip time="35.740385" duration="0.461538" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_18_20_Insert_3_7434" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="35.740385" duration="0.461538">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="64.396187">
+										<File path="audio/blank_gawryle_2024_10_26_00_18_20_Insert_3_7434.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="35.740385" contentTime="64.396187" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+				</Clips>
+			</Lanes>
+			<Lanes track="id4">
+				<Clips>
+					<Clip time="83.408654" duration="0.461538" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_42_26_Insert_3_17349" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="83.408654" duration="0.461538">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="129.194427">
+										<File path="audio/blank_gawryle_2024_10_26_00_42_26_Insert_3_17349.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="83.408654" contentTime="129.194427" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+				</Clips>
+			</Lanes>
+			<Lanes track="id6">
+				<Clips>
+					<Clip time="36.942308" duration="42.442308" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_04_34_Insert_3_7684" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="36.942308" duration="42.442308">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="144.322723">
+										<File path="audio/blank_gawryle_2024_10_26_00_04_34_Insert_3_7684.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="36.942308" contentTime="144.322723" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+					<Clip time="83.721154" duration="0.461538" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_04_34_Insert_3_17414" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="83.721154" duration="0.461538">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="144.322723">
+										<File path="audio/blank_gawryle_2024_10_26_00_04_34_Insert_3_17414.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="83.721154" contentTime="144.322723" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+					<Clip time="88.615385" duration="31.384616" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_04_34_Insert_3_7684" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="88.615385" duration="31.384616">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="144.322723">
+										<File path="audio/blank_gawryle_2024_10_26_00_04_34_Insert_3_7684.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="88.615385" contentTime="144.322723" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+					<Clip time="125.538462" duration="20.307692" playStart="31.384616" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_04_34_Insert_3_7684" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="125.538462" duration="20.307692" playStart="31.384616">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="144.322723">
+										<File path="audio/blank_gawryle_2024_10_26_00_04_34_Insert_3_7684.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="125.538462" contentTime="144.322723" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+					<Clip time="160.615385" duration="24.572793" playStart="66.461539" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_04_34_Insert_3_7684" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="160.615385" duration="24.572793" playStart="66.461539">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="144.322723">
+										<File path="audio/blank_gawryle_2024_10_26_00_04_34_Insert_3_7684.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="160.615385" contentTime="144.322723" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+					<Clip time="199.384616" duration="14.769231" playStart="51.692308" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_04_34_Insert_3_7684" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="199.384616" duration="14.769231" playStart="51.692308">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="144.322723">
+										<File path="audio/blank_gawryle_2024_10_26_00_04_34_Insert_3_7684.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="199.384616" contentTime="144.322723" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+				</Clips>
+			</Lanes>
+			<Lanes track="id8">
+				<Clips>
+					<Clip time="25.846154" duration="0.461538" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_57_31_Insert_3_5376" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="25.846154" duration="0.461538">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="81.411156">
+										<File path="audio/blank_gawryle_2024_10_26_00_57_31_Insert_3_5376.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="25.846154" contentTime="81.411156" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+				</Clips>
+			</Lanes>
+			<Lanes track="id10">
+				<Clips>
+					<Clip time="25.745192" duration="0.461538" fadeTimeUnit="seconds" name="blank_gawryle_2024_10_26_00_57_31_Insert_3_5355" enable="true">
+						<Clips>
+							<Clip contentTimeUnit="seconds" time="25.745192" duration="0.461538">
+								<Warps contentTimeUnit="seconds" timeUnit="seconds">
+									<Audio sampleRate="44100" channels="2" duration="81.411156">
+										<File path="audio/blank_gawryle_2024_10_26_00_57_31_Insert_3_5355.wav" external="false" />
+									</Audio>
+									<Warp time="0" contentTime="0" />
+									<Warp time="25.745192" contentTime="81.411156" />
+								</Warps>
+							</Clip>
+						</Clips>
+					</Clip>
+				</Clips>
+			</Lanes>
+		</Lanes>
+	</Arrangement>
 </Project>

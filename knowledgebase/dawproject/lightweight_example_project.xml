@@ -1,0 +1,2 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Project version="0.1"><Application name="Cubase Example Project" version="14.0" /><Transport><Tempo value="120.000000" unit="bpm" max="300.000000" min="20.000000" /><TimeSignature numerator="4" denominator="4" /></Transport><Structure><Track contentType="audio" id="track1" name="Example Track" color="#0000FF"><Channel audioChannels="2" role="master"><Volume value="0.8" unit="linear" max="1.0" min="0.0" /><Pan value="0.5" unit="normalized" max="1.0" min="0.0" /></Channel></Track></Structure></Project>

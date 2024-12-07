@@ -5,11 +5,12 @@ import logging
 import shutil
 import zipfile
 
+from ..generator.dawproject_xml_generator import DAWProjectXMLGenerator
+
 from ..generator.xml_utils import XMLWriter
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
 from ..models.timing import ProjectTiming
-from .xml_builder import XMLBuilder
 
 class DAWProjectGenerator:
     def __init__(self, arrangements: List[Arrangement], clip_paths: Dict[Clip, Path]):
@@ -18,90 +19,61 @@ class DAWProjectGenerator:
         self.logger = logging.getLogger(__name__)
 
     def generate_dawproject(self, output_path: str) -> None:
+        """Generate DAWproject file at the specified path."""
+        output_path = Path(output_path)
+        
+        # Create unique temp directory for this dawproject
+        temp_dir = output_path.parent / f"temp_{output_path.stem}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
         try:
-            temp_dir = Path(output_path).parent / "temp_dawproject"
-            temp_dir.mkdir(parents=True, exist_ok=True)
+            # Generate XML using dedicated generator
+            xml_generator = DAWProjectXMLGenerator(self.arrangements, self.clip_paths)
+            project_xml = xml_generator.generate_xml(output_path.stem)
             
-            try:
-                # Generate XML files
-                self._generate_xml_files(temp_dir)
-                
-                # Copy and process audio files
-                self._process_audio_files(temp_dir)
-                
-                # Create final ZIP archive
-                self._create_archive(temp_dir, output_path)
-                
-                self.logger.info(f"Successfully generated DAWproject at {output_path}")
-                
-            finally:
-                if temp_dir.exists():
-                    # keeping existing temp-dir for debugging
-                    pass
-                    # shutil.rmtree(temp_dir)
-                    
-        except Exception as e:
-            self.logger.error(f"Failed to generate DAWproject: {e}")
-            raise
-
-    def _generate_xml_files(self, temp_dir: Path) -> None:
-        # Generate project.xml
-        project_xml = self._create_project_xml()
-        project_path = temp_dir / "project.xml"
-        XMLWriter.write_xml(project_xml, project_path)
-        
-        # Generate metadata.xml
-        metadata_xml = self._create_metadata_xml()
-        metadata_path = temp_dir / "metadata.xml"
-        XMLWriter.write_xml(metadata_xml, metadata_path)
-
-    def _create_project_xml(self) -> ET.Element:
-        root = ET.Element("Project", version="1.0")
-        
-        # Add Application info
-        ET.SubElement(root, "Application", name="FL Studio Converter", version="1.0")
-        
-        # Add Transport section
-        if self.arrangements and hasattr(self.arrangements[0], 'project'):
-            timing = self.arrangements[0].project.timing
-            root.append(XMLBuilder.create_transport_element(timing))
-        
-        # Add Structure section
-        structure = ET.SubElement(root, "Structure")
-        
-        # Add tracks for each arrangement
-        for i, arr in enumerate(self.arrangements):
-            structure.append(XMLBuilder.create_track_element(arr.name, i))
-        
-        # Add Arrangements
-        for i, arr in enumerate(self.arrangements):
-            arr_element = ET.SubElement(root, "Arrangement", id=f"arrangement-{i}")
-            lanes = ET.SubElement(arr_element, "Lanes", timeUnit="beats", id=f"lanes-{i}")
-            track_lanes = ET.SubElement(lanes, "Lanes", track=f"track-{i}", id=f"track-lanes-{i}")
-            clips = ET.SubElement(track_lanes, "Clips", id=f"clips-{i}")
+            # Write project.xml
+            project_path = temp_dir / "project.xml"
+            XMLWriter.write_xml(project_xml, project_path)
             
-            # Fixed: Iterate through tracks to get clips
-            for track in arr.get_tracks():
-                for clip in track.clips:
-                    clip_el = XMLBuilder.create_clip_element(clip, self.clip_paths.get(clip))
-                    if clip_el is not None:
-                        clips.append(clip_el)
-        
-        return root
+            # Generate and write metadata.xml
+            metadata_xml = self._create_metadata_xml()
+            metadata_path = temp_dir / "metadata.xml"
+            XMLWriter.write_xml(metadata_xml, metadata_path)
+            
+            # Process audio files
+            self._process_audio_files(temp_dir)
+            
+            # Create final archive
+            self._create_archive(temp_dir, output_path)
+            
+            self.logger.info(f"Successfully generated DAWproject at {output_path}")
+            
+        finally:
+            if temp_dir.exists():
+                pass
+                # Remove temp directory when done, disabled to allow later simpler entry into the generated files, to see what might be wrong with `project.xml`
+                # shutil.rmtree(temp_dir)
+
+    @staticmethod
+    def clear_output_directory(output_dir: Path) -> None:
+        """Clear target directory before generating new files."""
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     def _create_metadata_xml(self) -> ET.Element:
+        """Create metadata XML structure."""
         root = ET.Element("MetaData")
-        
         if self.arrangements:
             arr = self.arrangements[0]
             if hasattr(arr, 'project') and arr.project:
                 ET.SubElement(root, "Title").text = arr.project.name
             else:
                 ET.SubElement(root, "Title").text = arr.name
-                
         return root
 
     def _process_audio_files(self, temp_dir: Path) -> None:
+        """Process and copy audio files to temp directory."""
         audio_dir = temp_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
         
@@ -112,13 +84,12 @@ class DAWProjectGenerator:
             else:
                 self.logger.warning(f"Audio file not found: {source_path}")
 
-    def _create_archive(self, temp_dir: Path, output_path: str) -> None:
+    def _create_archive(self, temp_dir: Path, output_path: Path) -> None:
+        """Create final ZIP archive."""
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            # Add XML files
             zf.write(temp_dir / "project.xml", "project.xml")
             zf.write(temp_dir / "metadata.xml", "metadata.xml")
             
-            # Add audio files
             audio_dir = temp_dir / "audio"
             for audio_file in audio_dir.glob("*.wav"):
                 zf.write(audio_file, f"audio/{audio_file.name}")

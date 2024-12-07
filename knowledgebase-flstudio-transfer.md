@@ -755,7 +755,7 @@ setup(
 # src/fl2cu/main.py
 from pathlib import Path
 
-from .parser.project_parser import FLProjectParser
+from .parser.project_parser import FLProjectParser 
 from .generator.dawproject_generator import DAWProjectGenerator
 from .utils.logger import setup_logger, get_logger
 
@@ -780,18 +780,18 @@ def process_project(input_file: Path, output_dir: Path) -> bool:
         
         # Process each project (one per arrangement)
         for project in projects:
-            if not project.arrangements():  # Call method instead of property
+            if not project.arrangements:
                 continue
                 
-            # Fixed: Access arrangements as a property and iterate over clips properly
-            clip_paths = {
-                clip: clip.source_path 
-                for arrangement in project.arrangements()
-                for clip in arrangement.clips
-            }
+            # Fixed: Get clips from tracks in arrangements
+            clip_paths = {}
+            for arrangement in project.arrangements:
+                for track in arrangement.get_tracks():
+                    for clip in track.clips:
+                        clip_paths[clip] = clip.source_path
             
             generator = DAWProjectGenerator(
-                arrangements=project.arrangements(),
+                arrangements=project.arrangements,
                 clip_paths=clip_paths
             )
 
@@ -959,12 +959,12 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from typing import Dict, List, Optional
 
-from ..generator.xml_utils import XMLWriter
+from ..generator.dawproject_xml_generator import DAWProjectXMLGenerator
 
+from ..generator.xml_utils import XMLWriter
 from ..models.arrangement import Arrangement
 from ..models.clip import Clip
 from ..models.timing import ProjectTiming
-from .xml_builder import XMLBuilder
 
 class DAWProjectGenerator:
     def __init__(self, arrangements: List[Arrangement], clip_paths: Dict[Clip, Path]):
@@ -973,198 +973,79 @@ class DAWProjectGenerator:
         self.logger = logging.getLogger(__name__)
 
     def generate_dawproject(self, output_path: str) -> None:
+        """Generate DAWproject file at the specified path."""
+        output_path = Path(output_path)
+        
+        # Create unique temp directory for this dawproject
+        temp_dir = output_path.parent / f"temp_{output_path.stem}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
         try:
-            temp_dir = Path(output_path).parent / "temp_dawproject"
-            temp_dir.mkdir(parents=True, exist_ok=True)
+            # Generate XML using dedicated generator
+            xml_generator = DAWProjectXMLGenerator(self.arrangements, self.clip_paths)
+            project_xml = xml_generator.generate_xml(output_path.stem)
             
-            try:
-                # Generate XML files
-                self._generate_xml_files(temp_dir)
-                
-                # Copy and process audio files
-                self._process_audio_files(temp_dir)
-                
-                # Create final ZIP archive
-                self._create_archive(temp_dir, output_path)
-                
-                self.logger.info(f"Successfully generated DAWproject at {output_path}")
-                
-            finally:
-                if temp_dir.exists():
-                    # keeping existing temp-dir for debugging
-                    pass
-                    # shutil.rmtree(temp_dir)
-                    
-        except Exception as e:
-            self.logger.error(f"Failed to generate DAWproject: {e}")
-            raise
-
-    def _generate_xml_files(self, temp_dir: Path) -> None:
-        # Generate project.xml
-        project_xml = self._create_project_xml()
-        project_path = temp_dir / "project.xml"
-        XMLWriter.write_xml(project_xml, project_path)
-        
-        # Generate metadata.xml
-        metadata_xml = self._create_metadata_xml()
-        metadata_path = temp_dir / "metadata.xml"
-        XMLWriter.write_xml(metadata_xml, metadata_path)
-
-    def _create_project_xml(self) -> ET.Element:
-        root = ET.Element("Project", version="1.0")
-        
-        # Add Application info
-        ET.SubElement(root, "Application", name="FL Studio Converter", version="1.0")
-        
-        # Add Transport section
-        if self.arrangements and hasattr(self.arrangements[0], 'project'):
-            timing = self.arrangements[0].project.timing
-            root.append(XMLBuilder.create_transport_element(timing))
-        
-        # Add Structure section
-        structure = ET.SubElement(root, "Structure")
-        
-        # Add tracks for each arrangement
-        for i, arr in enumerate(self.arrangements):
-            structure.append(XMLBuilder.create_track_element(arr.name, i))
-        
-        # Add Arrangements
-        for i, arr in enumerate(self.arrangements):
-            arr_element = ET.SubElement(root, "Arrangement", id=f"arrangement-{i}")
-            lanes = ET.SubElement(arr_element, "Lanes", timeUnit="beats", id=f"lanes-{i}")
-            track_lanes = ET.SubElement(lanes, "Lanes", track=f"track-{i}", id=f"track-lanes-{i}")
-            clips = ET.SubElement(track_lanes, "Clips", id=f"clips-{i}")
+            # Write project.xml
+            project_path = temp_dir / "project.xml"
+            XMLWriter.write_xml(project_xml, project_path)
             
-            for clip in arr.clips:
-                clip_el = XMLBuilder.create_clip_element(clip, self.clip_paths.get(clip))
-                if clip_el is not None:
-                    clips.append(clip_el)
-        
-        return root
+            # Generate and write metadata.xml
+            metadata_xml = self._create_metadata_xml()
+            metadata_path = temp_dir / "metadata.xml"
+            XMLWriter.write_xml(metadata_xml, metadata_path)
+            
+            # Process audio files
+            self._process_audio_files(temp_dir)
+            
+            # Create final archive
+            self._create_archive(temp_dir, output_path)
+            
+            self.logger.info(f"Successfully generated DAWproject at {output_path}")
+            
+        finally:
+            if temp_dir.exists():
+                pass
+                # Remove temp directory when done, disabled to allow later simpler entry into the generated files, to see what might be wrong with `project.xml`
+                # shutil.rmtree(temp_dir)
+
+    def clear_output_directory(output_dir: Path) -> None:
+        """Clear target directory before generating new files."""
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     def _create_metadata_xml(self) -> ET.Element:
+        """Create metadata XML structure."""
         root = ET.Element("MetaData")
-        
         if self.arrangements:
             arr = self.arrangements[0]
             if hasattr(arr, 'project') and arr.project:
                 ET.SubElement(root, "Title").text = arr.project.name
             else:
                 ET.SubElement(root, "Title").text = arr.name
-                
         return root
 
     def _process_audio_files(self, temp_dir: Path) -> None:
+        """Process and copy audio files to temp directory."""
         audio_dir = temp_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
         
         for clip, source_path in self.clip_paths.items():
-            if source_path.exists():
+            if source_path and source_path.exists():
                 dest_path = audio_dir / f"{clip.name}.wav"
                 shutil.copy2(source_path, dest_path)
             else:
                 self.logger.warning(f"Audio file not found: {source_path}")
 
-    def _create_archive(self, temp_dir: Path, output_path: str) -> None:
+    def _create_archive(self, temp_dir: Path, output_path: Path) -> None:
+        """Create final ZIP archive."""
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            # Add XML files
             zf.write(temp_dir / "project.xml", "project.xml")
             zf.write(temp_dir / "metadata.xml", "metadata.xml")
             
-            # Add audio files
             audio_dir = temp_dir / "audio"
             for audio_file in audio_dir.glob("*.wav"):
                 zf.write(audio_file, f"audio/{audio_file.name}")
-```
----
-
-#### src\fl2cu\generator\xml_builder.py
-```
-from pathlib import Path
-from xml.etree import ElementTree as ET
-from typing import Dict, List, Optional
-
-from ..models.arrangement import Arrangement
-from ..models.clip import Clip
-from ..models.timing import ProjectTiming
-
-class XMLBuilder:
-    def create_transport_element(timing: ProjectTiming) -> ET.Element:
-        transport = ET.Element("Transport")
-        ET.SubElement(transport, "Tempo",
-            unit="bpm",
-            value=str(timing.tempo),
-            min="20",
-            max="999",
-            id="tempo"
-        )
-        ET.SubElement(transport, "TimeSignature",
-            numerator=str(timing.time_signature_numerator),
-            denominator=str(timing.time_signature_denominator),
-            id="timesig"
-        )
-        return transport
-
-    def create_track_element(name: str, index: int) -> ET.Element:
-        track = ET.Element("Track",
-            contentType="audio",
-            loaded="true",
-            id=f"track-{index}",
-            name=name,
-            color="#a2eabf"
-        )
-        
-        # Add Channel
-        channel = ET.SubElement(track, "Channel",
-            audioChannels="2",
-            role="regular",
-            solo="false",
-            id=f"channel-{index}"
-        )
-        
-        # Add default channel controls
-        ET.SubElement(channel, "Volume", value="1.0", min="0.0", max="2.0", unit="linear")
-        ET.SubElement(channel, "Pan", value="0.5", min="0.0", max="1.0", unit="normalized")
-        ET.SubElement(channel, "Mute", value="false")
-        
-        return track
-
-    def create_clip_element(clip: Clip, clip_path: Path) -> Optional[ET.Element]:
-        if not clip_path.exists():
-            return None
-            
-        clip_el = ET.Element("Clip",
-            time=str(clip.position),
-            duration=str(clip.duration),
-            name=clip.name
-        )
-        
-        if clip.volume != 1.0:
-            clip_el.set("level", str(clip.volume))
-        if clip.muted:
-            clip_el.set("enable", "false")
-        
-        warps = ET.SubElement(clip_el, "Warps",
-            contentTimeUnit="seconds",
-            timeUnit="beats"
-        )
-        
-        audio = ET.SubElement(warps, "Audio",
-            channels="2",
-            duration=str(clip.duration),
-            sampleRate="44100",
-            algorithm="stretch"
-        )
-        
-        ET.SubElement(audio, "File",
-            path=f"audio/{clip.name}.wav"
-        )
-        
-        # Add warp points for time stretching
-        ET.SubElement(warps, "Warp", time="0.0", contentTime="0.0")
-        ET.SubElement(warps, "Warp", time=str(clip.duration), contentTime=str(clip.duration))
-        
-        return clip_el
 ```
 ---
 
@@ -1621,6 +1502,24 @@ class ProjectTiming:
                 'denominator': str(self.time_signature_denominator)
             }
         }
+```
+---
+
+#### src\fl2cu\models\track.py
+```
+from dataclasses import dataclass
+from typing import List
+
+from .clip import Clip
+
+
+class Track:
+    """Represents a track containing clips."""
+    
+    def __init__(self, name: str, id: str, clips: List[Clip]):
+        self.name = name
+        self.id = id
+        self.clips = clips
 ```
 ---
 

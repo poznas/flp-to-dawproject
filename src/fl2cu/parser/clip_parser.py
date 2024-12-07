@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Optional, Callable
 import logging
+import os
+import re
 from ..models.clip import Clip
 
 class FLClipParser:
@@ -13,11 +15,10 @@ class FLClipParser:
         self.logger = logging.getLogger(__name__)
 
     def create_clip(self, channel, position: float, track_name: Optional[str] = None) -> Optional[Clip]:
-        """Create clip from FL Studio channel with optional track assignment."""
         try:
             # Get base name from channel and ensure uniqueness with position
             base_name = getattr(channel, 'name', '') or "unnamed_clip"
-            base_name = base_name.replace(" ", "_")
+            base_name = re.sub(r'[^\w\-]', '_', base_name)
             name = f"{base_name}_{int(position)}"
             
             # Get sample path if available
@@ -29,12 +30,13 @@ class FLClipParser:
             if not source_path:
                 return None
 
-            # Calculate timing (convert from PPQ to time)
-            position_beats = float(position) / self.ppq  # Convert to beats
-            duration = float(getattr(channel, 'length', self.ppq)) / self.ppq  # Length in beats
-            
-            # Get color (default if not set)
-            color = self._get_color(channel)
+            # Get duration in beats directly from PPQ
+            duration = getattr(channel, 'length', 0) / self.ppq if hasattr(channel, 'length') else 0
+            if duration <= 0:
+                return None
+
+            # Position already in beats (PPQ-based)
+            position_beats = position / self.ppq
             
             # Get normalized volume
             volume = self._get_volume(channel)
@@ -47,7 +49,7 @@ class FLClipParser:
                 name=name,
                 position=position_beats,
                 duration=duration,
-                color=color,
+                color=self._get_color(channel),
                 source_path=source_path,
                 track_name=track_name or "Default",
                 volume=volume,
@@ -62,7 +64,6 @@ class FLClipParser:
             return None
 
     def _get_color(self, channel) -> str:
-        """Extract color from channel with fallback to default."""
         try:
             if hasattr(channel, 'color'):
                 color = channel.color
@@ -78,7 +79,6 @@ class FLClipParser:
         return "#a2eabf"  # Default color matching sample
 
     def _get_volume(self, channel) -> float:
-        """Get normalized volume from channel."""
         try:
             if hasattr(channel, 'volume'):
                 raw_volume = float(channel.volume)
