@@ -22,21 +22,21 @@ class ClipGenerator:
         return clip_el
         
     def create_audio_clip(self, clip: Clip) -> ET.Element:
-        """Create inner audio Clip element from Clip model."""
+        """Create inner audio clip element with proper file reference."""
         inner_clip = ET.Element("Clip",
             contentTimeUnit="beats",
             time=str(clip.position),
             duration=str(clip.duration),
         )
         
-        # Add audio element
+        # Add audio element with channel/sample rate from metadata if available
         audio = ET.SubElement(inner_clip, "Audio",
-            channels="2",
-            sampleRate="44100" # this should be read from the clip
+            channels=str(clip.metadata.get('channels', 2)),
+            sampleRate=str(clip.metadata.get('sample_rate', 48000))
         )
         
-        # Add file reference
-        audio_path = f"audio/{clip.name}.wav"
+        # Use the output filename that preserves original format
+        audio_path = f"audio/{clip.output_filename}"
         ET.SubElement(audio, "File",
             path=audio_path,
             external="false"

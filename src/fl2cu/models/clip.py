@@ -10,9 +10,9 @@ class Clip:
     name: str                     # Unique name for the clip
     position: float               # Position in beats  
     duration: float               # Duration in beats
-    source_path: Path            # Path to source audio file
+    source_path: Path            # Path to source audio file'
     track_name: str              # Name of containing track
-    
+    format: str
     # Optional attributes with defaults must come after required ones
     start_offset: float = 0.0    # Start offset in source audio
     end_offset: float = 0.0      # End offset in source audio
@@ -42,3 +42,8 @@ class Clip:
     def __hash__(self):
         # Use the most unique attributes to generate hash
         return hash((self.name, self.position, self.track_name, str(self.source_path)))
+    
+    @property 
+    def output_filename(self) -> str:
+        """Get the filename to use in the DAWproject."""
+        return f"{self.name}.{self.format}"

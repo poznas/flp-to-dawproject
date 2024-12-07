@@ -93,26 +93,33 @@ class DAWProjectGenerator:
         return root
 
     def _process_audio_files(self, temp_dir: Path) -> None:
-        """Process and copy audio files to the temp directory.
-        
-        Args:
-            temp_dir: Temporary directory for DAWproject contents
-        """
+        """Process and copy audio files to the temp directory."""
         audio_dir = temp_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
+        
+        # Keep track of processed files to avoid duplicates 
+        processed_files = set()
         
         for source_path, clip in self.clip_paths.items():
             if not source_path or not source_path.exists():
                 self.logger.warning(f"Audio file not found: {source_path}")
                 continue
                 
-            try:
-                dest_path = audio_dir / f"{clip.name}.wav"
-                self._copy_audio_file(source_path, dest_path)
-            except Exception as e:
-                self.logger.error(f"Failed to copy audio file {source_path}: {e}")
-                raise
-
+            # Use clip's output filename with original format
+            dest_filename = clip.output_filename
+            dest_path = audio_dir / dest_filename
+            
+            # Skip if file already exists
+            if dest_path.exists() or dest_filename in processed_files:
+                self.logger.debug(f"Audio file already exists, skipping: {dest_filename}")
+                continue
+            
+            # Simple file copy
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, dest_path)
+            processed_files.add(dest_filename)
+            
+            
     def _copy_audio_file(self, source_path: Path, dest_path: Path) -> None:
         """Copy audio file with validation.
         
