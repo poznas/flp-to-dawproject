@@ -1049,6 +1049,146 @@ class DAWProjectGenerator:
 ```
 ---
 
+#### src\fl2cu\generator\dawproject_xml_generator.py
+```
+from pathlib import Path
+from xml.etree import ElementTree as ET
+from typing import Dict, List, Optional
+
+from ..models.arrangement import Arrangement
+from ..models.clip import Clip
+
+class DAWProjectXMLGenerator:
+    def __init__(self, arrangements: List['Arrangement'], clip_paths: Dict['Clip', Path]):
+        self.arrangements = arrangements
+        self.clip_paths = clip_paths
+        self.logger = logging.getLogger(__name__)
+
+    def generate_xml(self, project_name: str) -> ET.Element:
+        root = ET.Element("Project", version="1.0")
+        
+        # Application info  
+        ET.SubElement(root, "Application", 
+            name="Cubase", 
+            version="14.0.5"
+        )
+        
+        root.append(self._create_transport_element())
+        
+        # Structure section with tracks
+        structure = ET.SubElement(root, "Structure")
+        
+        # Generate tracks and clips
+        if self.arrangements:
+            arrangement = self.arrangements[0]
+            tracks = arrangement.get_tracks()
+            
+            for track_idx, track in enumerate(tracks, 1):
+                # Create track
+                track_el = ET.SubElement(structure, "Track",
+                    contentType="audio",
+                    id=f"id{track_idx*2}",
+                    name=track.name,
+                    color="#a2eabfff"
+                )
+                
+                # Add channel
+                channel = ET.SubElement(track_el, "Channel",
+                    role="regular",
+                    audioChannels="2", 
+                    id=f"id{track_idx*2+1}",
+                    name=track.name,
+                    destination="id0"
+                )
+                self._add_channel_settings(channel)
+
+        # Create arrangement section
+        arrangement = ET.SubElement(root, "Arrangement")
+        lanes = ET.SubElement(arrangement, "Lanes", timeUnit="beats")
+        
+        # Process clips for each track
+        for track_idx, track in enumerate(tracks, 1):
+            track_lanes = ET.SubElement(lanes, "Lanes", 
+                track=f"id{track_idx*2}"
+            )
+            
+            if track.clips:
+                clips = ET.SubElement(track_lanes, "Clips")
+                
+                for clip in track.clips:
+                    # Create clip using original beat-based timing
+                    clip_el = ET.SubElement(clips, "Clip",
+                        time=str(clip.position),
+                        duration=str(clip.duration), 
+                        fadeTimeUnit="beats",
+                        name=clip.name,
+                        enable="true"
+                    )
+                    
+                    inner_clips = ET.SubElement(clip_el, "Clips")
+                    audio_clip = ET.SubElement(inner_clips, "Clip",
+                        contentTimeUnit="beats",
+                        time=str(clip.position),
+                        duration=str(clip.duration)
+                    )
+                    
+                    # Add audio element
+                    audio = ET.SubElement(audio_clip, "Audio",
+                        channels="2",
+                        sampleRate="44100"
+                    )
+                    
+                    ET.SubElement(audio, "File",
+                        path=f"audio/{clip.name}.wav",
+                        external="false"
+                    )
+
+        return root
+    
+    def _add_channel_settings(self, channel_el: ET.Element) -> None:
+        """Add standard channel settings."""
+        ET.SubElement(channel_el, "Mute",
+            value="false",
+            name="Mute"
+        )
+        ET.SubElement(channel_el, "Pan",
+            value="0.5",
+            unit="normalized",
+            min="0",
+            max="1", 
+            name="Pan"
+        )
+        ET.SubElement(channel_el, "Volume",
+            value="1",
+            unit="linear", 
+            min="0",
+            max="2",
+            name="Volume"
+        )
+
+    def _create_transport_element(self) -> ET.Element:
+        """Create transport element with tempo and time signature settings."""
+        transport = ET.Element("Transport")
+        
+        # Get timing from first project
+        timing = self.arrangements[0].project.timing
+        
+        # Add tempo
+        ET.SubElement(transport, "Tempo",
+            unit="bpm",
+            value=str(int(timing.tempo))
+        )
+        
+        # Add time signature
+        ET.SubElement(transport, "TimeSignature",
+            numerator=str(timing.time_signature_numerator),
+            denominator=str(timing.time_signature_denominator)
+        )
+        
+        return transport
+```
+---
+
 #### src\fl2cu\generator\xml_utils.py
 ```
 from xml.etree import ElementTree as ET
@@ -1107,28 +1247,20 @@ class XMLWriter:
 
 #### src\fl2cu\models\__init__.py
 ```
-# fl2cu/models/__init__.py
-"""Data models for FL Studio to Cubase migration."""
-from fl2cu.models.base import BaseProject
-from fl2cu.models.project import Project
-from fl2cu.models.arrangement import Arrangement
-from fl2cu.models.clip import Clip
 
-__all__ = ['BaseProject', 'Project', 'Arrangement', 'Clip']
 ```
 ---
 
 #### src\fl2cu\models\arrangement.py
 ```
-# src/fl2cu/models/arrangement.py
-
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from pathlib import Path
 
 from .track import Track
 
-from .clip import Clip
+if TYPE_CHECKING:
+    from .project import Project
 
 class Arrangement:
     """Represents an arrangement containing tracks and clips."""
@@ -1136,6 +1268,7 @@ class Arrangement:
     def __init__(self, name: str):
         self.name = name
         self._tracks: List[Track] = []
+        self.project: Optional['Project'] = None  # Use string type annotation
         
     def add_track(self, track: Track) -> None:
         """Add a track to the arrangement."""
@@ -1153,11 +1286,12 @@ class Arrangement:
 
 #### src\fl2cu\models\base.py
 ```
-# src/fl2cu/models/base.py
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, TYPE_CHECKING
 from pathlib import Path
-from .arrangement import Arrangement
 from .timing import ProjectTiming
+
+if TYPE_CHECKING:
+    from .arrangement import Arrangement
 
 class BaseProject:
     """Base class containing core Project functionality."""
@@ -1186,8 +1320,6 @@ class BaseProject:
 
     def remove_arrangement(self, arrangement: 'Arrangement') -> None:
         """Remove an arrangement from the project."""
-        if arrangement in self._arrangements:
-            self._arrangements.remove(arrangement)
 ```
 ---
 
@@ -1359,13 +1491,14 @@ class Clip:
 
 #### src\fl2cu\models\project.py
 ```
-# src/fl2cu/models/project.py
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any, Set, TYPE_CHECKING
 
-from fl2cu.models.base import BaseProject
-from fl2cu.models.arrangement import Arrangement
-from fl2cu.models.timing import ProjectTiming
+from .base import BaseProject
+from .timing import ProjectTiming
+
+if TYPE_CHECKING:
+    from .arrangement import Arrangement
 
 class Project(BaseProject):
     """Project class extending base functionality."""
@@ -1381,18 +1514,19 @@ class Project(BaseProject):
                         source_path=source_path, 
                         output_dir=output_dir)
     
-    def add_arrangement(self, arrangement: Arrangement) -> None:
+    def add_arrangement(self, arrangement: 'Arrangement') -> None:
         """Add an arrangement to the project."""
+        from .arrangement import Arrangement
         if arrangement.name in [arr.name for arr in self._arrangements]:
             raise ValueError(f"Arrangement {arrangement.name} already exists")
         self._arrangements.append(arrangement)
         
-    def remove_arrangement(self, arrangement: Arrangement) -> None:
+    def remove_arrangement(self, arrangement: 'Arrangement') -> None:
         """Remove an arrangement from the project."""
         if arrangement in self._arrangements:
             self._arrangements.remove(arrangement)
             
-    def get_arrangement_by_name(self, name: str) -> Optional[Arrangement]:
+    def get_arrangement_by_name(self, name: str) -> Optional['Arrangement']:
         """Find an arrangement by its name."""
         for arrangement in self._arrangements:
             if arrangement.name == name:
@@ -1401,8 +1535,6 @@ class Project(BaseProject):
         
     def validate(self) -> None:
         """Validate project and all its arrangements."""
-        super().validate()  # Call parent validation first
-            
         # Validate each arrangement
         for arrangement in self._arrangements:
             try:
@@ -1414,8 +1546,8 @@ class Project(BaseProject):
         """Get set of all unique audio file paths used in project."""
         paths = set()
         for arrangement in self._arrangements:
-            for clip in arrangement.clips:
-                if clip.source_path:
+            for clip in arrangement.get_tracks():
+                if hasattr(clip, 'source_path') and clip.source_path:
                     paths.add(clip.source_path)
         return paths
         
@@ -1425,23 +1557,23 @@ class Project(BaseProject):
         for path in self.get_all_clip_paths():
             if not path.exists():
                 missing_files.append(path)
-                self.logger.warning(f"Audio file not found: {path}")
                 
-        if missing_files:
-            self.logger.error(f"Missing {len(missing_files)} audio files")
-            return False
-        return True
-        
+        return len(missing_files) == 0
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert project to dictionary format for serialization."""
-        base_dict = super().to_dict()
-        base_dict.update({
+        return {
+            'name': self.name,
+            'timing': self.timing.to_dict() if self.timing else None,
+            'source_path': str(self.source_path) if self.source_path else None,
+            'output_dir': str(self.output_dir) if self.output_dir else None,
             'arrangements': [arr.to_dict() for arr in self._arrangements]
-        })
-        return base_dict
+        }
     
     def from_dict(cls, data: Dict[str, Any]) -> 'Project':
         """Create project instance from dictionary data."""
+        from .arrangement import Arrangement
+        
         timing_data = data.get('timing', {})
         timing = ProjectTiming(
             tempo=float(timing_data.get('tempo', 120.0)),
@@ -1550,67 +1682,66 @@ class FLArrangementParser:
         self.logger.debug(f"Found {len(fl_arrangements)} FL Studio arrangements")
         
         for fl_arr in fl_arrangements:
-            try:
-                # Create arrangement
-                arrangement_name = getattr(fl_arr, 'name', None) or "Unnamed Arrangement"
-                arrangement = Arrangement(name=arrangement_name)
-                self.logger.debug(f"\nProcessing arrangement: {arrangement_name}")
+            # Create arrangement
+            arrangement_name = getattr(fl_arr, 'name', None) or "Unnamed Arrangement"
+            arrangement = Arrangement(name=arrangement_name)
+            self.logger.debug(f"\nProcessing arrangement: {arrangement_name}")
+            
+            # Get playlist data
+            playlist_data = None
+            if hasattr(fl_arr, 'tracks'):
+                fl_tracks = list(fl_arr.tracks)
+                self.logger.debug(f"Found {len(fl_tracks)} FL Studio tracks")
                 
-                # Get playlist data
-                playlist_data = None
-                if hasattr(fl_arr, 'tracks'):
-                    fl_tracks = list(fl_arr.tracks)
-                    self.logger.debug(f"Found {len(fl_tracks)} FL Studio tracks")
-                    
-                    # Process each track
-                    for track_idx, fl_track in enumerate(fl_tracks):
-                        # Get track clips
-                        track_clips = []
-                        if hasattr(fl_track, '__iter__'):
-                            items = list(fl_track)
-                            if len(items) < 1:
-                                continue
-                            self.logger.debug(f"Track contains {len(items)} items")
+                # Process each track
+                for track_idx, fl_track in enumerate(fl_tracks):
+                    # Get track clips
+                    track_clips = []
+                    if hasattr(fl_track, '__iter__'):
+                        items = list(fl_track)
+                        if len(items) < 1:
+                            continue
+                        self.logger.debug(f"Track contains {len(items)} items")
+                        
+                        for item in items:
+                            self.logger.debug(f"Processing item: {item}")
                             
-                            for item in items:
-                                self.logger.debug(f"Processing item: {item}")
-                                
-                                # Try to create clip from item
-                                clip = None
-                                if hasattr(item, 'channel'):
-                                    self.logger.debug(f"Item has channel: {item.channel}")
-                                    clip = self.clip_parser.create_clip(
-                                        channel=item.channel,
-                                        position=item.position,
-                                        track_name=f"Track {track_idx}"
-                                    )
-                                
-                                if clip:
-                                    track_clips.append(clip)
-                                    self.logger.debug(f"Created clip: {clip.name}")
-                        
-                        # Only create track if it has clips
-                        if track_clips:
-                            track = Track(
-                                name=getattr(fl_track, 'name', None) or f"Track {track_idx}",
-                                id=f"track-{track_idx}",
-                                clips=track_clips
-                            )
-                            arrangement.add_track(track)
-                            self.logger.debug(f"Added track with {len(track_clips)} clips")
-                
-                if arrangement.has_tracks():
-                    arrangements.append(arrangement)
-                    self.logger.debug(
-                        f"Successfully parsed arrangement '{arrangement.name}' with "
-                        f"{len(arrangement.get_tracks())} tracks"
-                    )
-                else:
-                    self.logger.debug("Skipping arrangement - no tracks with clips found")
-                        
-            except Exception as e:
-                self.logger.error(f"Failed to parse arrangement {getattr(fl_arr, 'name', 'Unknown')}: {e}")
-                self.logger.debug("Stack trace:", exc_info=True)
+                            # Try to create clip from item
+                            clip = None
+                            if hasattr(item, 'channel'):
+                                self.logger.debug(f"Item has channel: {item.channel}")
+                                clip = self.clip_parser.create_clip(
+                                    channel=item.channel,
+                                    position=item.position,
+                                    length=item.length,  # Pass length from playlist item
+                                    track_name=f"Track {track_idx}"
+                                )
+                            else:
+                                raise ValueError(F"Unable to retrieve channel data from {item}")
+                            
+                            if clip:
+                                track_clips.append(clip)
+                                self.logger.debug(f"Created clip: {clip.name}")
+                            
+                    
+                    # Only create track if it has clips
+                    if track_clips:
+                        track = Track(
+                            name=getattr(fl_track, 'name', None) or f"Track {track_idx}",
+                            id=f"track-{track_idx}",
+                            clips=track_clips
+                        )
+                        arrangement.add_track(track)
+                        self.logger.debug(f"Added track with {len(track_clips)} clips")
+            
+            if arrangement.has_tracks():
+                arrangements.append(arrangement)
+                self.logger.debug(
+                    f"Successfully parsed arrangement '{arrangement.name}' with "
+                    f"{len(arrangement.get_tracks())} tracks"
+                )
+            else:
+                self.logger.debug("Skipping arrangement - no tracks with clips found")
 
         if not arrangements:
             raise ValueError("No valid arrangements found in FL Studio project")
@@ -1630,16 +1761,23 @@ class FLClipParser:
     
     def __init__(self, fl_project: 'pyflp.Project', path_resolver: Callable):
         self.fl_project = fl_project
-        self.ppq = getattr(fl_project, 'ppq', 96)
+        self.ppq = getattr(fl_project, 'ppq', 96) # this property should rather come from value parsed by other classes
         self.path_resolver = path_resolver
         self.logger = logging.getLogger(__name__)
 
-    def create_clip(self, channel, position: float, track_name: Optional[str] = None) -> Optional[Clip]:
-        """Create clip from FL Studio channel with optional track assignment."""
+    def create_clip(self, channel, position: float, length: Optional[float] = None, track_name: Optional[str] = None) -> Optional[Clip]:
+        """Create clip from FL Studio channel.
+        
+        Args:
+            channel: FL Studio channel (Sampler)
+            position: Position in PPQ units
+            length: Length in PPQ units 
+            track_name: Name of containing track
+        """
         try:
             # Get base name from channel and ensure uniqueness with position
             base_name = getattr(channel, 'name', '') or "unnamed_clip"
-            base_name = base_name.replace(" ", "_")
+            base_name = re.sub(r'[^\w\-]', '_', base_name)
             name = f"{base_name}_{int(position)}"
             
             # Get sample path if available
@@ -1651,12 +1789,16 @@ class FLClipParser:
             if not source_path:
                 return None
 
-            # Calculate timing (convert from PPQ to time)
-            position_beats = float(position) / self.ppq  # Convert to beats
-            duration = float(getattr(channel, 'length', self.ppq)) / self.ppq  # Length in beats
-            
-            # Get color (default if not set)
-            color = self._get_color(channel)
+            # Get duration in beats
+            if length is None:
+                raise ValueError(f"Length not provided for clip from {channel}")
+                
+            duration = length / self.ppq
+            if duration <= 0:
+                raise ValueError(f"Invalid duration {duration} for clip from {channel}")
+
+            # Position in beats
+            position_beats = position / self.ppq
             
             # Get normalized volume
             volume = self._get_volume(channel)
@@ -1664,12 +1806,11 @@ class FLClipParser:
             # Get mute state
             muted = not bool(getattr(channel, 'enabled', True))
 
-            # Create clip with track assignment
             clip = Clip(
                 name=name,
                 position=position_beats,
                 duration=duration,
-                color=color,
+                color=self._get_color(channel),
                 source_path=source_path,
                 track_name=track_name or "Default",
                 volume=volume,
@@ -1680,11 +1821,10 @@ class FLClipParser:
             return clip
 
         except Exception as e:
-            self.logger.error(f"Failed to create clip: {e}")
-            return None
-
+            self.logger.error(f"Failed to create clip from {channel}: {e}")
+            raise e
+    
     def _get_color(self, channel) -> str:
-        """Extract color from channel with fallback to default."""
         try:
             if hasattr(channel, 'color'):
                 color = channel.color
@@ -1700,7 +1840,6 @@ class FLClipParser:
         return "#a2eabf"  # Default color matching sample
 
     def _get_volume(self, channel) -> float:
-        """Get normalized volume from channel."""
         try:
             if hasattr(channel, 'volume'):
                 raw_volume = float(channel.volume)
@@ -1813,30 +1952,32 @@ class FLProjectParser:
             return None
 
     def parse_project(self) -> List[Project]:
-        """Parse FL Studio project and create separate DAWproject for each arrangement."""
         try:
             # Parse timing info
             timing = self.timing_parser.parse_timing()
             
-            # Parse arrangements with their tracks and clips
+            # Parse arrangements
             arrangements = self.arrangement_parser.parse_arrangements()
             
-            # Create separate project for each arrangement
+            # Create projects
             projects = []
             for arrangement in arrangements:
-                # Create arrangement-specific project
+                # Create project with timing info
                 project = Project(
                     name=f"{self.file_path.stem}_{arrangement.name}",
                     timing=timing,
                     source_path=self.file_path
                 )
                 
-                # Add the arrangement with all its tracks and clips
+                # Set project reference on arrangement
+                arrangement.project = project  
+                
+                # Add arrangement to project
                 project.add_arrangement(arrangement)
                 projects.append(project)
             
             return projects
-            
+                
         except Exception as e:
             self.logger.error(f"Failed to parse project: {e}")
             raise

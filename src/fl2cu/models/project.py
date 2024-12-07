@@ -1,10 +1,11 @@
-# src/fl2cu/models/project.py
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any, Set, TYPE_CHECKING
 
-from fl2cu.models.base import BaseProject
-from fl2cu.models.arrangement import Arrangement
-from fl2cu.models.timing import ProjectTiming
+from .base import BaseProject
+from .timing import ProjectTiming
+
+if TYPE_CHECKING:
+    from .arrangement import Arrangement
 
 class Project(BaseProject):
     """Project class extending base functionality."""
@@ -20,18 +21,19 @@ class Project(BaseProject):
                         source_path=source_path, 
                         output_dir=output_dir)
     
-    def add_arrangement(self, arrangement: Arrangement) -> None:
+    def add_arrangement(self, arrangement: 'Arrangement') -> None:
         """Add an arrangement to the project."""
+        from .arrangement import Arrangement
         if arrangement.name in [arr.name for arr in self._arrangements]:
             raise ValueError(f"Arrangement {arrangement.name} already exists")
         self._arrangements.append(arrangement)
         
-    def remove_arrangement(self, arrangement: Arrangement) -> None:
+    def remove_arrangement(self, arrangement: 'Arrangement') -> None:
         """Remove an arrangement from the project."""
         if arrangement in self._arrangements:
             self._arrangements.remove(arrangement)
             
-    def get_arrangement_by_name(self, name: str) -> Optional[Arrangement]:
+    def get_arrangement_by_name(self, name: str) -> Optional['Arrangement']:
         """Find an arrangement by its name."""
         for arrangement in self._arrangements:
             if arrangement.name == name:
@@ -40,8 +42,6 @@ class Project(BaseProject):
         
     def validate(self) -> None:
         """Validate project and all its arrangements."""
-        super().validate()  # Call parent validation first
-            
         # Validate each arrangement
         for arrangement in self._arrangements:
             try:
@@ -53,8 +53,8 @@ class Project(BaseProject):
         """Get set of all unique audio file paths used in project."""
         paths = set()
         for arrangement in self._arrangements:
-            for clip in arrangement.clips:
-                if clip.source_path:
+            for clip in arrangement.get_tracks():
+                if hasattr(clip, 'source_path') and clip.source_path:
                     paths.add(clip.source_path)
         return paths
         
@@ -64,24 +64,24 @@ class Project(BaseProject):
         for path in self.get_all_clip_paths():
             if not path.exists():
                 missing_files.append(path)
-                self.logger.warning(f"Audio file not found: {path}")
                 
-        if missing_files:
-            self.logger.error(f"Missing {len(missing_files)} audio files")
-            return False
-        return True
-        
+        return len(missing_files) == 0
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert project to dictionary format for serialization."""
-        base_dict = super().to_dict()
-        base_dict.update({
+        return {
+            'name': self.name,
+            'timing': self.timing.to_dict() if self.timing else None,
+            'source_path': str(self.source_path) if self.source_path else None,
+            'output_dir': str(self.output_dir) if self.output_dir else None,
             'arrangements': [arr.to_dict() for arr in self._arrangements]
-        })
-        return base_dict
+        }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Project':
         """Create project instance from dictionary data."""
+        from .arrangement import Arrangement
+        
         timing_data = data.get('timing', {})
         timing = ProjectTiming(
             tempo=float(timing_data.get('tempo', 120.0)),

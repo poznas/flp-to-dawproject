@@ -53,30 +53,32 @@ class FLProjectParser:
             return None
 
     def parse_project(self) -> List[Project]:
-        """Parse FL Studio project and create separate DAWproject for each arrangement."""
         try:
             # Parse timing info
             timing = self.timing_parser.parse_timing()
             
-            # Parse arrangements with their tracks and clips
+            # Parse arrangements
             arrangements = self.arrangement_parser.parse_arrangements()
             
-            # Create separate project for each arrangement
+            # Create projects
             projects = []
             for arrangement in arrangements:
-                # Create arrangement-specific project
+                # Create project with timing info
                 project = Project(
                     name=f"{self.file_path.stem}_{arrangement.name}",
                     timing=timing,
                     source_path=self.file_path
                 )
                 
-                # Add the arrangement with all its tracks and clips
+                # Set project reference on arrangement
+                arrangement.project = project  
+                
+                # Add arrangement to project
                 project.add_arrangement(arrangement)
                 projects.append(project)
             
             return projects
-            
+                
         except Exception as e:
             self.logger.error(f"Failed to parse project: {e}")
             raise

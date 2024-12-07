@@ -1,8 +1,9 @@
-# src/fl2cu/models/base.py
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, TYPE_CHECKING
 from pathlib import Path
-from .arrangement import Arrangement
 from .timing import ProjectTiming
+
+if TYPE_CHECKING:
+    from .arrangement import Arrangement
 
 class BaseProject:
     """Base class containing core Project functionality."""
@@ -32,5 +33,3 @@ class BaseProject:
 
     def remove_arrangement(self, arrangement: 'Arrangement') -> None:
         """Remove an arrangement from the project."""
-        if arrangement in self._arrangements:
-            self._arrangements.remove(arrangement)

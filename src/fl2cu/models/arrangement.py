@@ -1,12 +1,11 @@
-# src/fl2cu/models/arrangement.py
-
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from pathlib import Path
 
 from .track import Track
 
-from .clip import Clip
+if TYPE_CHECKING:
+    from .project import Project
 
 class Arrangement:
     """Represents an arrangement containing tracks and clips."""
@@ -14,6 +13,7 @@ class Arrangement:
     def __init__(self, name: str):
         self.name = name
         self._tracks: List[Track] = []
+        self.project: Optional['Project'] = None  # Use string type annotation
         
     def add_track(self, track: Track) -> None:
         """Add a track to the arrangement."""
