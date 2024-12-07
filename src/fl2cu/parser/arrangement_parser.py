@@ -47,24 +47,13 @@ class FLArrangementParser:
                         self.logger.debug(f"Track contains {len(items)} items")
                         
                         for item in items:
-                            self.logger.debug(f"Processing item: {item}")
-                            
                             # Try to create clip from item
-                            clip = None
-                            if hasattr(item, 'channel'):
-                                self.logger.debug(f"Item has channel: {item.channel}")
-                                clip = self.clip_parser.create_clip(
-                                    channel=item.channel,
-                                    position=item.position,
-                                    length=item.length,  # Pass length from playlist item
-                                    track_name=f"Track {track_idx}"
-                                )
-                            else:
-                                raise ValueError(F"Unable to retrieve channel data from {item}")
+                            clip = self.clip_parser.create_clip(item, track_name=f"Track {track_idx}")
                             
                             if clip:
                                 track_clips.append(clip)
-                                self.logger.debug(f"Created clip: {clip.name}")
+                            else:
+                                raise Exception(f"Failed to parse clip for {item}.")
                             
                     
                     # Only create track if it has clips

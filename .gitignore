@@ -22,6 +22,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# knowledgbase
+knowledgebase-*.md
+
 # Virtual Environment
 venv/
 env/

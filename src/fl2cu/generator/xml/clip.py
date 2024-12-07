@@ -10,9 +10,6 @@ class ClipGenerator:
             time=str(clip.position),
             duration=str(clip.duration),
             playStart=str(clip.start_offset),
-            playStop=str(clip.end_offset),
-            loopStart=str(clip.start_offset),
-            loopEnd=str(clip.end_offset),
             fadeTimeUnit="beats",
             name=clip.name,
             enable=str(not clip.muted).lower()
@@ -30,15 +27,12 @@ class ClipGenerator:
             contentTimeUnit="beats",
             time=str(clip.position),
             duration=str(clip.duration),
-            fadeTimeUnit="beats",
-            fadeInTime="0.0",
-            fadeOutTime="0.0"
         )
         
         # Add audio element
         audio = ET.SubElement(inner_clip, "Audio",
             channels="2",
-            sampleRate="44100"
+            sampleRate="44100" # this should be read from the clip
         )
         
         # Add file reference

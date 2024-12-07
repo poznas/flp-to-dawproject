@@ -10,15 +10,16 @@ from ..models.clip import Clip
 from .xml.generator import DAWProjectXMLGenerator
 from .xml_utils import XMLWriter
 
+
 class DAWProjectGenerator:
     """Handles generation of complete DAWproject files."""
     
-    def __init__(self, arrangements: List[Arrangement], clip_paths: Dict[Clip, Path]):
+    def __init__(self, arrangements: List[Arrangement], clip_paths: Dict[Path, Clip]):
         """Initialize generator with arrangements and clip paths.
         
         Args:
             arrangements: List of arrangements to process
-            clip_paths: Dictionary mapping clips to their source audio paths
+            clip_paths: Dictionary mapping source paths to clips
         """
         self.arrangements = arrangements
         self.clip_paths = clip_paths
@@ -36,7 +37,7 @@ class DAWProjectGenerator:
         output_path = Path(output_path)
         
         # Create unique temp directory for this dawproject
-        temp_dir = output_dir = output_path.parent / f"temp_{output_path.stem}"
+        temp_dir = output_path.parent / f"temp_{output_path.stem}"
         temp_dir.mkdir(parents=True, exist_ok=True)
         
         try:
@@ -78,7 +79,6 @@ class DAWProjectGenerator:
         if self.arrangements:
             arr = self.arrangements[0]
             if hasattr(arr, 'project') and arr.project:
-                # Add project metadata if available
                 project = arr.project
                 ET.SubElement(root, "Title").text = project.name
                 
@@ -88,7 +88,6 @@ class DAWProjectGenerator:
                 if hasattr(project, 'comments'):
                     ET.SubElement(root, "Comment").text = project.comments
             else:
-                # Fallback to arrangement name
                 ET.SubElement(root, "Title").text = arr.name
         
         return root
@@ -102,7 +101,7 @@ class DAWProjectGenerator:
         audio_dir = temp_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
         
-        for clip, source_path in self.clip_paths.items():
+        for source_path, clip in self.clip_paths.items():
             if not source_path or not source_path.exists():
                 self.logger.warning(f"Audio file not found: {source_path}")
                 continue
@@ -110,7 +109,6 @@ class DAWProjectGenerator:
             try:
                 dest_path = audio_dir / f"{clip.name}.wav"
                 self._copy_audio_file(source_path, dest_path)
-                self.logger.debug(f"Copied audio file: {source_path} -> {dest_path}")
             except Exception as e:
                 self.logger.error(f"Failed to copy audio file {source_path}: {e}")
                 raise
@@ -122,8 +120,14 @@ class DAWProjectGenerator:
             source_path: Source audio file path
             dest_path: Destination path in DAWproject
         """
-        # TODO: Add audio file validation and format conversion if needed
+        if not source_path.exists():
+            raise FileNotFoundError(f"Source audio file not found: {source_path}")
+            
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, dest_path)
+        
+        if not dest_path.exists():
+            raise RuntimeError(f"Failed to copy audio file to {dest_path}")
 
     def _create_archive(self, temp_dir: Path, output_path: Path) -> None:
         """Create final ZIP archive.
@@ -143,10 +147,3 @@ class DAWProjectGenerator:
             audio_dir = temp_dir / "audio"
             for audio_file in audio_dir.glob("*.wav"):
                 zf.write(audio_file, f"audio/{audio_file.name}")
-
-    @staticmethod
-    def clear_output_directory(output_dir: Path) -> None:
-        """Clear target directory before generating new files."""
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)

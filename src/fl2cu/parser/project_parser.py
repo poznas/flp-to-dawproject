@@ -53,32 +53,27 @@ class FLProjectParser:
             return None
 
     def parse_project(self) -> List[Project]:
-        try:
-            # Parse timing info
-            timing = self.timing_parser.parse_timing()
+        # Parse timing info
+        timing = self.timing_parser.parse_timing()
+        
+        # Parse arrangements
+        arrangements = self.arrangement_parser.parse_arrangements()
+        
+        # Create projects
+        projects = []
+        for arrangement in arrangements:
+            # Create project with timing info
+            project = Project(
+                name=f"{self.file_path.stem}_{arrangement.name}",
+                timing=timing,
+                source_path=self.file_path
+            )
             
-            # Parse arrangements
-            arrangements = self.arrangement_parser.parse_arrangements()
+            # Set project reference on arrangement
+            arrangement.project = project  
             
-            # Create projects
-            projects = []
-            for arrangement in arrangements:
-                # Create project with timing info
-                project = Project(
-                    name=f"{self.file_path.stem}_{arrangement.name}",
-                    timing=timing,
-                    source_path=self.file_path
-                )
-                
-                # Set project reference on arrangement
-                arrangement.project = project  
-                
-                # Add arrangement to project
-                project.add_arrangement(arrangement)
-                projects.append(project)
-            
-            return projects
-                
-        except Exception as e:
-            self.logger.error(f"Failed to parse project: {e}")
-            raise
+            # Add arrangement to project
+            project.add_arrangement(arrangement)
+            projects.append(project)
+        
+        return projects

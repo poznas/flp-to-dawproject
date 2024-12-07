@@ -17,45 +17,38 @@ def setup_logging(debug: bool) -> None:
 def process_project(input_file: Path, output_dir: Path) -> bool:
     logger = get_logger()
     
-    try:
-        parser = FLProjectParser(str(input_file))
-        projects = parser.parse_project()  # Returns list of projects
-        
-        if not projects:
-            logger.error("No arrangements found in project")
-            return False
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Process each project (one per arrangement)
-        for project in projects:
-            if not project.arrangements:
-                continue
-                
-            # Fixed: Get clips from tracks in arrangements
-            clip_paths = {}
-            for arrangement in project.arrangements:
-                for track in arrangement.get_tracks():
-                    for clip in track.clips:
-                        clip_paths[clip] = clip.source_path
-            
-            generator = DAWProjectGenerator(
-                arrangements=project.arrangements,
-                clip_paths=clip_paths
-            )
-
-            output_file = output_dir / f"{project.name}.dawproject"
-            generator.generate_dawproject(str(output_file))
-            logger.info(f"Generated: {output_file}")
-        
-        return True
-
-    except Exception as e:
-        logger.error(f"Error processing project: {e}")
-        if logger.level <= logging.DEBUG:
-            logger.exception("Details:")
+    parser = FLProjectParser(str(input_file))
+    projects = parser.parse_project()  # Returns list of projects
+    
+    if not projects:
+        logger.error("No arrangements found in project")
         return False
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process each project (one per arrangement)
+    for project in projects:
+        if not project.arrangements:
+            continue
+            
+        # Fixed: Store clip paths in a list instead of using clips as keys
+        clip_paths = []
+        for arrangement in project.arrangements:
+            for track in arrangement.get_tracks():
+                for clip in track.clips:
+                    clip_paths.append((clip.source_path, clip))
+        
+        generator = DAWProjectGenerator(
+            arrangements=project.arrangements,
+            clip_paths=dict(clip_paths)  # Convert to dictionary using source_path as key
+        )
+
+        output_file = output_dir / f"{project.name}.dawproject"
+        generator.generate_dawproject(str(output_file))
+        logger.info(f"Generated: {output_file}")
+    
+    return True
+    
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", type=str)
