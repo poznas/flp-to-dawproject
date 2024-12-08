@@ -1,14 +1,23 @@
 # FL Studio to Cubase Migration Tool
-A Python-based tool for transferring audio arrangements between FL Studio and Cubase while preserving clip positions, colors, and organization.
+
+A Python-based tool for transferring audio arrangements from FL Studio to Cubase using the open DAWproject format as an intermediate step.
 
 ## Features
-- Maintains precise clip positions and timing 
-- Preserves color coding and visual organization
-- Supports multiple arrangements with folder structure
-- Handles large projects (~1000 clips) efficiently
-- Automates the export process
-- Preserves audio quality during transfer
-- Generates debugging-friendly XML output
+- Exports FL Studio audio clips while preserving:
+  - Clip positions and timing
+  - Track organization
+  - File references
+  - Basic clip properties (volume, pan, mute)
+- Exports to DAWproject format (.dawproject)
+  - Industry standard open format
+  - Vendor-neutral exchange format
+  - Compatible with multiple DAWs including Cubase, Bitwig Studio, and Studio One
+  - XML-based for easy debugging and modification
+
+## Basic Usage
+```bash
+python -m fl2cu "path/to/project.flp" "path/to/output" --debug
+```
 
 ## Requirements
 - Python 3.8+
@@ -32,121 +41,86 @@ pip install -r dev-requirements.txt
 pip install -e .
 ```
 
-### Dependencies
-Core dependencies are installed automatically:
-- pyflp>=2.0.0 - FL Studio project parsing
-- construct>=2.10.0 - Binary data parsing
-- wave>=0.0.2 - WAV file processing
-- numpy>=1.21.0 - Audio data manipulation
-- lxml>=4.9.0 - XML processing
+## Limitations 
 
-## Usage
+### Clip Support
+- Only audio clips are converted
+- MIDI patterns, automation, and other event types are ignored
+- No support for clip effects or real-time processing
 
-### Basic Usage
-```python
-# Parse FL Studio project
-project = fl2cu.parse("path/to/project.flp")
+### Timing
+- FL Studio stores offsets in milliseconds while DAWproject uses beats
+- Some minor timing precision differences may occur during conversion
+- All timing in output uses beats as the primary unit
 
-# Export to XML files
-output_files = fl2cu.save(project, "path/to/output", format="xml")
+### Properties 
+- Colors are not preserved (Cubase ignores them anyway)
+- Limited metadata transfer
+- Basic properties only (position, length, mute state)
+- No support for advanced features like automation
 
-# Debug mode with extra logging
-output_files = fl2cu.save(project, "path/to/output", format="xml", debug=True)
+## Project Structure
+```
+flstudio-transfer/
+├── src/
+│   └── fl2cu/
+│       ├── __init__.py
+│       ├── __main__.py         # Main entry point
+│       ├── generator/
+│       │   ├── __init__.py
+│       │   ├── dawproject_generator.py  # DAWproject generation
+│       │   ├── xml/
+│       │   │   ├── clip.py     # Clip XML generation
+│       │   │   ├── generator.py # Core XML generation
+│       │   │   ├── structure.py # Base XML structure
+│       │   │   └── track.py    # Track XML generation
+│       │   └── xml_utils.py    # XML helper utilities
+│       ├── models/
+│       │   ├── __init__.py
+│       │   ├── arrangement.py  # Arrangement model
+│       │   ├── base.py        # Base model functionality
+│       │   ├── clip.py        # Clip model
+│       │   ├── project.py     # Project model
+│       │   ├── timing.py      # Timing information model
+│       │   └── track.py       # Track model
+│       ├── parser/
+│       │   ├── __init__.py
+│       │   ├── arrangement_parser.py  # Arrangement parsing
+│       │   ├── clip_parser.py       # Audio clip parsing
+│       │   ├── pattern_parser.py    # Pattern parsing
+│       │   ├── project_parser.py    # Main project parsing
+│       │   └── timing_parser.py     # Timing data parsing
+│       └── utils/
+           ├── __init__.py
+           └── logger.py        # Logging configuration
+├── tests/
+│   └── ...                    # Test files (to be added)
+├── .pylintrc                  # Linting configuration
+├── dev-requirements.txt       # Development dependencies
+├── mypy.ini                   # Type checking configuration
+├── pytest.ini                 # Test configuration
+├── pyproject.toml            # Project configuration
+├── requirements.txt          # Core dependencies
+└── setup.py                 # Package setup
+
 ```
 
-### Output Structure
+## Output Structure
 ```
 output/
-  ├── NAGRYWKI_MAIN/
-  │   ├── audio_files/
-  │   └── arrangement.xml
-  ├── NAGRYWKI_CHOREK/
-  │   ├── audio_files/
-  │   └── arrangement.xml
-  └── debug/
-      ├── parser_logs/
-      └── conversion_data/
+  ├── project.dawproject    # Contains:
+  │   ├── project.xml      # Main project structure
+  │   ├── metadata.xml     # Project metadata  
+  │   └── audio/          # Referenced audio files
+  └── debug/              # When --debug is used
+      └── logs/          # Detailed conversion logs
 ```
-
-## Development
-
-### Running Tests
-```batch
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_xml_generator.py
-
-# Run with coverage report
-pytest --cov=src
-```
-
-### Project Structure
-```
-flstudio_cubase_migration/
-├── src/
-│   ├── __init__.py
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── project_parser.py     # FL Studio project parsing logic
-│   │   ├── audio_processor.py    # Audio file handling and processing
-│   │   └── xml_generator.py      # XML generation and manipulation
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── project.py           # Project data structures
-│   │   ├── arrangement.py       # Arrangement-specific models
-│   │   └── clip.py             # Audio clip data models
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   ├── file_manager.py     # File system operations
-│   │   └── logger.py           # Logging configuration
-│   ├── exporters/
-│   │   ├── __init__.py
-│   │   ├── xml_exporter.py     # XML export functionality
-│   │   └── base.py            # Base exporter interface
-│   └── config.py               # Global configuration
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py             # PyTest configuration and shared fixtures
-│   ├── test_project_parser.py  # Project parsing tests
-│   ├── test_audio_processor.py # Audio processing tests
-│   ├── test_xml_generator.py   # XML generation tests
-│   ├── test_models.py         # Data model tests
-│   ├── test_file_manager.py   # File system operation tests
-│   ├── test_exporters.py      # Exporter tests
-│   ├── integration/
-│   │   └── test_full_workflow.py # End-to-end workflow tests
-│   └── fixtures/               # Test data and mock files
-│       ├── README.md          # Fixtures documentation
-│       ├── sample_project.flp
-│       ├── audio_clips/
-│       │   ├── clip1.wav
-│       │   └── clip2.wav
-│       └── expected_output/
-│           └── expected_arrangement.xml
-├── examples/
-│   └── sample_project/        # Example project files
-├── docs/
-│   ├── api_reference.md       # API documentation
-│   └── xml_format.md         # XML format specification
-├── requirements.txt           # Project dependencies
-├── dev-requirements.txt       # Development dependencies
-├── setup.py                  # Installation configuration
-├── pytest.ini               # Test configuration
-├── .pylintrc               # Pylint configuration
-├── mypy.ini                # Type checking configuration
-└── pyproject.toml         # Code formatting and build configuration
-```
-
-## Known Limitations
-- FL Studio's project format limitations (see PyFLP documentation)
-- Large projects should be processed in chunks (~1000 clips per arrangement)
 
 ## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-Please make sure to update tests as appropriate.
+PRs welcome - send a video of it working and I'll probably merge it. Fork as you like.
 
 ## License
-[MIT](https://choosealicense.com/licenses/mit/)
+MIT licensed - completely open source.
+
+## Note to Image-Line
+Will take this down instantly if you add ARA2 support 🙏
