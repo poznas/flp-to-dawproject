@@ -47,6 +47,9 @@ class FLArrangementParser:
                         self.logger.debug(f"Track contains {len(items)} items")
                         
                         for item in items:
+                            if not hasattr(item, 'channel'):
+                                self.logger.warning(f"Item nas no channel, skipping {item}")
+                                continue
                             # Try to create clip from item
                             clip = self.clip_parser.create_clip(item, track_name=f"Track {track_idx}")
                             

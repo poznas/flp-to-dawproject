@@ -47,7 +47,7 @@ class FLProjectParser:
                     path = path.replace(var_pattern, var_value)
                     
             resolved_path = Path(path)
-            return resolved_path if resolved_path.exists() else None
+            return resolved_path
         except Exception as e:
             self.logger.error(f"Failed to resolve path {path}: {e}")
             return None

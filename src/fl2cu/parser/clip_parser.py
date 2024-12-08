@@ -89,8 +89,10 @@ class FLClipParser:
                 resolved = self.path_resolver(str(alt_path))
                 if resolved and resolved.exists():
                     return resolved
+            
+            self.logger.warning("⚠️ Parsing: Clip sample path doesn't exist")
 
-            return None
+            return source_path
 
         except Exception as e:
             self.logger.error(f"Error resolving audio path {raw_path}: {e}")
