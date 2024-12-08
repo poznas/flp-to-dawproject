@@ -1,6 +1,7 @@
 # FL Studio to Cubase Migration Tool
 
 A Python-based tool for transferring audio arrangements from FL Studio to Cubase using the open DAWproject format as an intermediate step.
+Project created as a mean to quickly export a lot of `.flp`, projects with multiple recorded & trimmed clips, into Cubase, where I can enjoy ARA support while doing further vocal surgery.
 
 ## Features
 - Exports FL Studio audio clips while preserving:
